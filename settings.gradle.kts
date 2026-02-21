@@ -12,4 +12,4 @@ plugins {
 }
 
 rootProject.name = "sql-notebook"
-include("app")
+include("sql-notebook-core")
