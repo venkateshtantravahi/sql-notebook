@@ -1,0 +1,31 @@
+name: naming-convention.yml
+on:
+  pull_request:
+    types: [ opened, assigned, synchronize ]
+
+jobs:
+  check-branch-name:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch naming
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          PATTERN="^(feat|fix|docs|chore|test|refactor)/.+"
+          if [[ ! "$BRANCH" =~ $PATTERN ]]; then
+            echo "Branch '$BRANCH' must follow: feat/*, fix/*, docs/*, chore/*, test/*, refactor/*"
+            exit 1
+          fi
+          echo "Branch name is valid"
+
+  check-pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR title
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          PATTERN="^(feat|fix|docs|chore|test|refactor)(\(.+\))?: .+"
+          if [[ ! "$TITLE" =~ $PATTERN ]]; then
+            echo "PR title '$TITLE' must follow: feat: description  or  feat(scope): description"
+            exit 1
+          fi
+          echo "PR title is valid"
