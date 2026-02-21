@@ -41,6 +41,12 @@ public class ConnectionRegistry {
         pools.clear();
     }
 
+    public void validateNamespace(String namespace) {
+        if (!pools.containsKey(namespace)) {
+            throw new ConnectionRegistryException("Unknown namespace: " + namespace);
+        }
+    }
+
     private HikariConfig buildHikariConfig(ConnectionConfig config) {
         HikariConfig hikari =  new HikariConfig();
         hikari.setJdbcUrl(buildJdbcUrl(config));

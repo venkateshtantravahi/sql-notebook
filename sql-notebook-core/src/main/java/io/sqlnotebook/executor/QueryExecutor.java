@@ -1,6 +1,7 @@
 package io.sqlnotebook.executor;
 
 import io.sqlnotebook.connection.ConnectionRegistry;
+import io.sqlnotebook.connection.ConnectionRegistryException;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -19,7 +20,8 @@ public class QueryExecutor {
         this.threadPool = Executors.newFixedThreadPool(threadPoolSize);
     }
 
-    public Future<QueryResult> execute(String namespace, String sql) {
+    public Future<QueryResult> execute(String namespace, String sql) throws ConnectionRegistryException {
+        registry.validateNamespace(namespace);
         return threadPool.submit(() -> runQuery(namespace, sql));
     }
 
