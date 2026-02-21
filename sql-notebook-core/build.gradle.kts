@@ -19,7 +19,33 @@ repositories {
 dependencies {
     // This dependency is used by the application.
     implementation(libs.guava)
+    // Source: https://mvnrepository.com/artifact/com.zaxxer/HikariCP
+    implementation("com.zaxxer:HikariCP:7.0.2")
+    // Source: https://mvnrepository.com/artifact/com.mysql/mysql-connector-j
+    implementation("com.mysql:mysql-connector-j:9.6.0")
+    // Source: https://mvnrepository.com/artifact/org.postgresql/postgresql
+    implementation("org.postgresql:postgresql:42.7.10")
+    // Source: https://mvnrepository.com/artifact/org.xerial/sqlite-jdbc
+    implementation("org.xerial:sqlite-jdbc:3.51.2.0")
+    // Source: https://mvnrepository.com/artifact/com.microsoft.sqlserver/mssql-jdbc
+    implementation("com.microsoft.sqlserver:mssql-jdbc:13.2.1.jre11")
+    // Source: https://mvnrepository.com/artifact/com.oracle.database.jdbc/ojdbc17
+    implementation("com.oracle.database.jdbc:ojdbc17:23.26.1.0.0")
 
+    // Source: https://mvnrepository.com/artifact/org.testcontainers/junit-jupiter
+    testImplementation("org.testcontainers:junit-jupiter:1.21.4")
+    // Source: https://mvnrepository.com/artifact/org.testcontainers/mysql
+    testImplementation("org.testcontainers:mysql:1.21.4")
+    // Source: https://mvnrepository.com/artifact/org.testcontainers/postgresql
+    testImplementation("org.testcontainers:postgresql:1.21.4")
+    // Source: https://mvnrepository.com/artifact/org.testcontainers/mssqlserver
+    testImplementation("org.testcontainers:mssqlserver:1.21.4")
+    // Source: https://mvnrepository.com/artifact/org.testcontainers/oracle-free
+    testImplementation("org.testcontainers:oracle-free:1.21.4")
+
+    // logging
+    // Source: https://mvnrepository.com/artifact/ch.qos.logback/logback-classic
+    implementation("ch.qos.logback:logback-classic:1.5.32")
 }
 
 testing {
