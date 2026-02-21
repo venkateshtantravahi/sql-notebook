@@ -1,0 +1,125 @@
+= Config Parser
+:toc: left
+:toclevels: 3
+:source-highlighter: highlight.js
+
+== Overview
+
+The Config Parser is the entry point of `sql-notebook`. It reads a `sql.properties` file, validates each database connection definition, and returns a structured map of named connections (namespaces) the rest of the application uses.
+
+== Classes
+
+=== `ConnectionConfig`
+
+A Java record holding connection details for a single database.
+
+[cols="1,1,2"]
+|===
+|Field |Type |Description
+
+|`namespace` |`String` |Unique name identifying this connection
+|`type` |`String` |Database type (see supported types)
+|`host` |`String` |Database host address
+|`port` |`int` |Database port
+|`database` |`String` |Database/schema name
+|`user` |`String` |Username
+|`password` |`String` |Password
+|`poolSize` |`int` |Max connections in pool (default: 5)
+|===
+
+=== `ConfigParser`
+
+Reads and parses `sql.properties` into `Map<String, ConnectionConfig>`.
+
+[source,java]
+----
+ConfigParser parser = new ConfigParser();
+Map<String, ConnectionConfig> configs = parser.parse("/path/to/sql.properties");
+----
+
+=== `ConfigException`
+
+Thrown when the config file is missing, malformed, or contains unsupported values.
+
+== Configuration Reference
+
+=== File Format
+
+Properties follow the pattern: `db.<namespace>.<field>=<value>`
+
+[source,properties]
+----
+db.local_mysql.type=mysql
+db.local_mysql.host=localhost
+db.local_mysql.port=3306
+db.local_mysql.database=myapp
+db.local_mysql.user=root
+db.local_mysql.password=secret
+db.local_mysql.pool.size=5
+----
+
+=== Supported Database Types
+
+[cols="1,1"]
+|===
+|Type |Value in properties file
+
+|MySQL |`mysql`
+|PostgreSQL |`postgres`
+|Oracle |`oracle`
+|SQLite |`sqlite`
+|Microsoft SQL Server |`microsoft-sql-server`
+|===
+
+=== Multiple Connections
+
+Multiple namespaces can be defined in the same file:
+
+[source,properties]
+----
+db.prod_mysql.type=mysql
+db.prod_mysql.host=prod-host
+db.prod_mysql.port=3306
+db.prod_mysql.database=production
+db.prod_mysql.user=admin
+db.prod_mysql.password=secret
+
+db.analytics_pg.type=postgres
+db.analytics_pg.host=analytics-host
+db.analytics_pg.port=5432
+db.analytics_pg.database=analytics
+db.analytics_pg.user=analyst
+db.analytics_pg.password=secret
+db.analytics_pg.pool.size=10
+----
+
+== Error Handling
+
+[cols="2,2"]
+|===
+|Scenario |Exception Message
+
+|File not found |`Config file not found: <path>`
+|Missing required field |`Missing required field '<field>' for namespace: <namespace>`
+|Unsupported DB type |`Unsupported type '<type>' for namespace: <namespace>`
+|Invalid port or pool size |`Invalid port/pool.size for namespace: <namespace>`
+|===
+
+== Tests
+
+Located at `src/test/java/io/sqlnotebook/config/ConfigParserTest.java`
+
+[cols="2,2"]
+|===
+|Test |What it validates
+
+|`parseSingleMysqlConnection` |Single MySQL config parses correctly
+|`parseTwoConnections` |Two namespaces both parse independently
+|`parseSingleOracleConnection` |Oracle type is supported
+|`parseSingleSqliteConnection` |SQLite type is supported
+|`parseSingleMssqlConnection` |Microsoft SQL Server type is supported
+|`throwsOnMissingRequiredField` |Missing field gives meaningful error
+|`throwsOnUnsupportedType` |Unknown DB type throws exception
+|`throwsWhenFileNotFound` |Missing file throws exception
+|`defaultPoolSizeAppliedWhenMissing` |Pool size defaults to 5
+|===
