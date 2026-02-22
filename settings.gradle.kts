@@ -20,3 +20,5 @@ plugins {
 
 rootProject.name = "sql-notebook"
 include("sql-notebook-core")
+
+
