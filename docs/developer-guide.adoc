@@ -1,0 +1,236 @@
+= Developer Guide
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: rouge
+
+== Overview
+
+This guide explains the sql-notebook backend architecture end to end — how the five modules connect, how data flows through the system, and what a developer needs to know to fix bugs or add features confidently.
+
+For per-module API detail, see the individual module docs in the `docs/` directory.
+
+== Architecture
+
+=== Module Dependency Chain
+
+Every request that reaches the browser travels through the following chain:
+
+```
+sql.properties
+      │
+      ▼
+ ConfigParser                   reads and validates the config file
+      │
+      ▼
+ ConnectionRegistry             creates one HikariCP pool per namespace
+      │
+      ▼
+ QueryExecutor                  submits SQL to a thread pool using pools from the registry
+      │
+      ▼
+ HttpServer (Jetty)             exposes the executor and registry over HTTP and WebSocket
+      │
+      ├── GET  /namespaces       → NamespaceHandler  → ConnectionRegistry.getNamespaces()
+      ├── POST /query            → QueryHandler      → QueryExecutor.execute()
+      └── WS   /ws/query        → QueryWebSocket    → QueryExecutor.execute()
+```
+
+No module knows about the ones above it in the chain. `QueryExecutor` does not know about Jetty. `ConnectionRegistry` does not know about `QueryExecutor`. Each module depends only downward.
+
+=== Key Classes
+
+[cols="2,4"]
+|===
+| Class | Responsibility
+
+| `ConfigParser`
+| Reads `sql.properties`, validates required fields, returns `Map<String, ConnectionConfig>`
+
+| `ConnectionConfig`
+| Immutable record: namespace, type, host, port, database, user, password, poolSize
+
+| `ConnectionRegistry`
+| Holds one `HikariDataSource` per namespace. Hands out `Connection` objects. Shuts down pools on exit.
+
+| `QueryExecutor`
+| Wraps a `ExecutorService`. Each `execute(namespace, sql)` call is one task on the pool, returns `Future<QueryResult>`.
+
+| `QueryResult`
+| Immutable record: namespace, sql, columns, rows, executionTimeMs, success, errorMessage
+
+| `HttpServer`
+| Configures and starts embedded Jetty. Mounts all handlers. Owns the server lifecycle.
+
+| `NamespaceHandler`
+| Servlet: `GET /namespaces` → serialises `Set<String>` to JSON
+
+| `QueryHandler`
+| Servlet: `POST /query` → reads JSON body, calls executor, waits for `Future`, returns `QueryResult` as JSON
+
+| `QueryWebSocket`
+| `@ServerEndpoint`: receives JSON message, pushes `running` immediately, waits on virtual thread, pushes `done` or `error`
+
+| `QueryRequest`
+| Immutable record: cellId, namespace, sql (incoming WebSocket message)
+
+| `QueryResponse`
+| Immutable record: cellId, status, result, error (outgoing WebSocket message)
+|===
+
+== Data Flow
+
+=== Startup
+
+[source]
+----
+main()
+  │
+  ├── ConfigParser.parse("sql.properties")
+  │     └── returns Map<String, ConnectionConfig>
+  │
+  ├── new ConnectionRegistry(configs)
+  │     └── for each namespace → creates HikariDataSource
+  │
+  ├── new QueryExecutor(registry)
+  │     └── creates fixed thread pool (size = sum of all pool sizes)
+  │
+  ├── new HttpServer(registry, executor, 8080)
+  │     ├── mounts NamespaceHandler at /namespaces
+  │     ├── mounts QueryHandler at /query
+  │     └── registers QueryWebSocket at /ws/query
+  │
+  └── server.start()
+        └── Desktop.browse("http://localhost:8080")
+----
+
+=== HTTP Query (POST /query)
+
+[source]
+----
+Browser
+  │── POST /query {"namespace":"local","sql":"SELECT 1"} ──►  QueryHandler.doPost()
+                                                                   │
+                                                                   ├── parse JSON body
+                                                                   ├── validate namespace + sql present
+                                                                   │
+                                                                   ├── executor.execute(namespace, sql)
+                                                                   │     └── ConnectionRegistry.getConnection(namespace)
+                                                                   │           └── HikariPool → real JDBC Connection
+                                                                   │     └── statement.executeQuery(sql)
+                                                                   │     └── build QueryResult
+                                                                   │
+                                                                   └── future.get() → wait → write JSON response
+  │◄── 200 OK {columns, rows, executionTimeMs, success} ──────────┘
+----
+
+=== WebSocket Query (ws/query)
+
+[source]
+----
+Browser
+  │── WS connect → /ws/query ────────────────────────────────►  QueryWebSocket.onOpen()
+  │── {"cellId":"cell-1","namespace":"local","sql":"SELECT 1"} ► QueryWebSocket.onMessage()
+                                                                   │
+                                                                   ├── parse message into QueryRequest
+                                                                   ├── sendMessage(session, running)  ← immediate
+                                                                   │
+                                                                   ├── executor.execute(namespace, sql) → Future
+                                                                   │
+                                                                   └── Thread.ofVirtual().start(() → {
+                                                                           result = future.get()       ← waits here
+                                                                           sendMessage(session, done)
+                                                                       })
+  │◄── {"cellId":"cell-1","status":"running"} ─────────────────────┘ (immediate)
+  │◄── {"cellId":"cell-1","status":"done","result":{...}} ──────────┘ (when query finishes)
+----
+
+=== Error Handling Philosophy
+
+There are two distinct types of errors and they are handled differently by design:
+
+[cols="1,2,2"]
+|===
+| Error type | Example | How it surfaces
+
+| SQL / DB-level error
+| Invalid table name, syntax error, type mismatch
+| `QueryResult.success = false`, `errorMessage` set. HTTP status 200. WebSocket status `done`.
+
+| Infrastructure error
+| Unknown namespace, missing fields, malformed JSON
+| HTTP 4xx status code. WebSocket status `error`. Never reaches the executor.
+|===
+
+This distinction means the frontend always receives a `QueryResult`-shaped response for SQL execution — it never needs to check HTTP status codes for query errors.
+
+== Connection Pooling
+
+Each namespace has its own `HikariDataSource` with a configurable pool size (default: 5). This means:
+
+- `prod` namespace with pool size 5 → max 5 concurrent queries against `prod`
+- `staging` namespace with pool size 3 → independent, max 3 concurrent queries
+- Namespaces never share connections — one namespace's pool exhaustion cannot block another
+
+HikariCP returns connections to the pool automatically when the `try-with-resources` block in `QueryExecutor` closes them. Connection leaks are prevented by HikariCP's leak detection timeout.
+
+== Thread Model
+
+[source]
+----
+Jetty acceptor threads     → accept HTTP/WebSocket connections
+Jetty handler threads      → run NamespaceHandler, QueryHandler (short-lived)
+QueryExecutor thread pool  → run actual JDBC queries (potentially long-lived)
+Virtual threads            → one per WebSocket query, waits on Future without blocking Jetty
+----
+
+The reason virtual threads are used in `QueryWebSocket` is important: Jetty's WebSocket message handler runs on a Jetty-managed thread. If that thread blocks on `future.get()`, Jetty cannot process other messages on the same connection. Virtual threads are cheap enough to create one per in-flight query.
+
+== Adding a New Feature
+
+=== Adding a new REST endpoint
+
+1. Create a new class extending `HttpServlet` in `io.sqlnotebook.server`
+2. Override `doGet` or `doPost`
+3. Register it in `HttpServer` constructor: `context.addServlet(new ServletHolder(new YourHandler(...)), "/your-path")`
+4. Write an integration test in `HttpServerTest` using the same pattern as existing tests
+5. Add a section to `docs/http-server.adoc`
+
+=== Adding a new database type
+
+1. Add the type string to the allowed list in `ConfigParser.java`
+2. Add the JDBC URL builder branch in `ConnectionRegistry.java`
+3. Add the JDBC driver dependency in `build.gradle.kts`
+4. Add the Testcontainers module dependency in `build.gradle.kts` (`testImplementation`)
+5. Add an integration test in `ConnectionRegistryTest` using a real container
+6. Update `docs/config-parser.adoc` and `sql.properties.example`
+
+=== Modifying QueryResult
+
+`QueryResult` is a record used across `QueryExecutor`, `QueryHandler`, and `QueryWebSocket`. If you add a field:
+
+- It will automatically appear in JSON responses (Jackson serialises all record components)
+- Update `QueryExecutorTest` assertions if the new field affects test outcomes
+- Update `docs/http-server.adoc` and `docs/websocket.adoc` response examples
+
+== Module Documentation Index
+
+[cols="1,3"]
+|===
+| Document | Contents
+
+| link:config-parser.adoc[config-parser.adoc]
+| `sql.properties` format, all supported keys, validation rules, error cases
+
+| link:connection-registry.adoc[connection-registry.adoc]
+| JDBC URL formats per database type, pool configuration, shutdown behaviour
+
+| link:query-executor.adoc[query-executor.adoc]
+| Thread pool, `QueryResult` structure, error handling, parallel execution
+
+| link:http-server.adoc[http-server.adoc]
+| REST endpoints, request/response formats, HTTP error codes
+
+| link:websocket.adoc[websocket.adoc]
+| WebSocket protocol, message schemas, parallel cell execution, JS client example
+|===

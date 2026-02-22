@@ -9,6 +9,7 @@
 plugins {
     // Apply the application plugin to add support for building a CLI application in Java.
     application
+//    id("com.autonomousapps.dependency-analysis") version "3.5.1"
 }
 
 repositories {
@@ -19,6 +20,49 @@ repositories {
 dependencies {
     // This dependency is used by the application.
     implementation(libs.guava)
+    // Source: https://mvnrepository.com/artifact/com.zaxxer/HikariCP
+    implementation("com.zaxxer:HikariCP:7.0.2")
+    // Source: https://mvnrepository.com/artifact/com.mysql/mysql-connector-j
+    implementation("com.mysql:mysql-connector-j:9.6.0")
+    // Source: https://mvnrepository.com/artifact/org.postgresql/postgresql
+    implementation("org.postgresql:postgresql:42.7.10")
+    // Source: https://mvnrepository.com/artifact/org.xerial/sqlite-jdbc
+    implementation("org.xerial:sqlite-jdbc:3.51.2.0")
+    // Source: https://mvnrepository.com/artifact/com.microsoft.sqlserver/mssql-jdbc
+    implementation("com.microsoft.sqlserver:mssql-jdbc:13.2.1.jre11")
+    // Source: https://mvnrepository.com/artifact/com.oracle.database.jdbc/ojdbc17
+    implementation("com.oracle.database.jdbc:ojdbc17:23.26.1.0.0")
+    // Source: https://mvnrepository.com/artifact/org.eclipse.jetty/jetty-server
+    implementation("org.eclipse.jetty:jetty-server:12.1.5")
+    // Source: https://mvnrepository.com/artifact/org.eclipse.jetty.ee10/jetty-ee10-servlet
+    implementation("org.eclipse.jetty.ee10:jetty-ee10-servlet:12.1.5")
+    // Source: https://mvnrepository.com/artifact/org.eclipse.jetty.ee10.websocket/jetty-ee10-websocket-jakarta-server
+    implementation("org.eclipse.jetty.ee10.websocket:jetty-ee10-websocket-jakarta-server:12.1.5")
+    // Source: https://mvnrepository.com/artifact/tools.jackson.core/jackson-databind
+    implementation("tools.jackson.core:jackson-databind:3.0.0")
+    // Source: https://mvnrepository.com/artifact/jakarta.servlet/jakarta.servlet-api
+    implementation("jakarta.servlet:jakarta.servlet-api:6.0.0")
+    // Source: https://mvnrepository.com/artifact/jakarta.websocket/jakarta.websocket-api
+    implementation("jakarta.websocket:jakarta.websocket-api:2.2.0")
+    // Source: https://mvnrepository.com/artifact/org.eclipse.jetty.toolchain/jetty-jakarta-servlet-api
+    implementation("org.eclipse.jetty.toolchain:jetty-jakarta-servlet-api:5.0.2")
+
+    // Source: https://mvnrepository.com/artifact/org.testcontainers/junit-jupiter
+    testImplementation("org.testcontainers:junit-jupiter:1.21.4")
+    // Source: https://mvnrepository.com/artifact/org.testcontainers/mysql
+    testImplementation("org.testcontainers:mysql:1.21.4")
+    // Source: https://mvnrepository.com/artifact/org.testcontainers/postgresql
+    testImplementation("org.testcontainers:postgresql:1.21.4")
+    // Source: https://mvnrepository.com/artifact/org.testcontainers/mssqlserver
+    testImplementation("org.testcontainers:mssqlserver:1.21.4")
+    // Source: https://mvnrepository.com/artifact/org.testcontainers/oracle-free
+    testImplementation("org.testcontainers:oracle-free:1.21.4")
+    // Source: https://mvnrepository.com/artifact/org.eclipse.jetty.ee10.websocket/jetty-ee10-websocket-jakarta-client
+    testImplementation("org.eclipse.jetty.ee10.websocket:jetty-ee10-websocket-jakarta-client:12.1.5")
+
+    // logging
+    // Source: https://mvnrepository.com/artifact/ch.qos.logback/logback-classic
+    implementation("ch.qos.logback:logback-classic:1.5.32")
 }
 
 testing {
@@ -27,6 +71,16 @@ testing {
         val test by getting(JvmTestSuite::class) {
             // Use JUnit Jupiter test framework
             useJUnitJupiter("5.12.1")
+        }
+    }
+}
+
+dependencyAnalysis {
+    issues {
+        allprojects {
+            onAny {
+                severity("warn")
+            }
         }
     }
 }

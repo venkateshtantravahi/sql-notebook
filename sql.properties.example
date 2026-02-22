@@ -1,0 +1,77 @@
+# sql-notebook configuration example
+# Copy this file to sql.properties and fill in your values.
+# sql.properties should never be committed to version control.
+
+# ─────────────────────────────────────────
+# PostgreSQL
+# ─────────────────────────────────────────
+db.local_pg.type=postgres
+db.local_pg.host=localhost
+db.local_pg.port=5432
+db.local_pg.database=mydb
+db.local_pg.user=postgres
+db.local_pg.password=secret
+db.local_pg.pool.size=5
+
+# ─────────────────────────────────────────
+# MySQL
+# ─────────────────────────────────────────
+db.local_mysql.type=mysql
+db.local_mysql.host=localhost
+db.local_mysql.port=3306
+db.local_mysql.database=mydb
+db.local_mysql.user=root
+db.local_mysql.password=secret
+db.local_mysql.pool.size=5
+
+# ─────────────────────────────────────────
+# Oracle
+# Uses service name format (not SID).
+# ─────────────────────────────────────────
+db.local_oracle.type=oracle
+db.local_oracle.host=localhost
+db.local_oracle.port=1521
+db.local_oracle.database=FREEPDB1
+db.local_oracle.user=system
+db.local_oracle.password=secret
+db.local_oracle.pool.size=3
+
+# ─────────────────────────────────────────
+# SQLite
+# host, port, and user are ignored for SQLite.
+# database is the path to the .db file.
+# Use :memory: for an in-memory database.
+# ─────────────────────────────────────────
+db.local_sqlite.type=sqlite
+db.local_sqlite.host=localhost
+db.local_sqlite.port=0
+db.local_sqlite.database=/path/to/your/file.db
+db.local_sqlite.user=
+db.local_sqlite.password=
+db.local_sqlite.pool.size=1
+
+# ─────────────────────────────────────────
+# Microsoft SQL Server
+# ─────────────────────────────────────────
+db.local_mssql.type=microsoft-sql-server
+db.local_mssql.host=localhost
+db.local_mssql.port=1433
+db.local_mssql.database=mydb
+db.local_mssql.user=sa
+db.local_mssql.password=Secret1234!
+db.local_mssql.pool.size=5
+
+# ─────────────────────────────────────────
+# Configuration reference
+# ─────────────────────────────────────────
+# db.<namespace>.type         Required. One of: postgres, mysql, oracle, sqlite, microsoft-sql-server
+# db.<namespace>.host         Required. Hostname or IP of the database server
+# db.<namespace>.port         Required. Port number
+# db.<namespace>.database     Required. Database name (or file path for SQLite)
+# db.<namespace>.user         Required. Database username
+# db.<namespace>.password     Required. Database password
+# db.<namespace>.pool.size    Optional. Number of connections in the pool. Default: 5
+#
+# <namespace> can be any alphanumeric string (e.g. prod, staging, local_pg).
+# Each namespace gets its own isolated connection pool.
+# You can define as many namespaces as you need.

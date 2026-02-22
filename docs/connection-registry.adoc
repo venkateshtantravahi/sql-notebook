@@ -1,0 +1,92 @@
+= Connection Registry
+:toc: left
+:toclevels: 3
+:source-highlighter: highlight.js
+
+== Overview
+
+The Connection Registry takes parsed `ConnectionConfig` objects from the Config Parser and creates one HikariCP connection pool per namespace. It is the single source of truth for all database connections in `sql-notebook`.
+
+== Classes
+
+=== `ConnectionRegistry`
+
+Holds one `HikariDataSource` per namespace and hands out connections on demand.
+
+[source,java]
+----
+ConnectionRegistry registry = new ConnectionRegistry(configs);
+Connection conn = registry.getConnection("prod_mysql");
+----
+
+==== Methods
+
+[cols="2,2"]
+|===
+|Method |Description
+
+|`getConnection(namespace)` |Returns a live connection from the namespace pool
+|`getNamespaces()` |Returns all registered namespace names
+|`shutdown()` |Closes all pools cleanly
+|===
+
+=== `ConnectionRegistryException`
+
+Thrown when a namespace is unknown or a connection cannot be established.
+
+== JDBC URL Formats
+
+Each database type maps to a specific JDBC URL format internally:
+
+[cols="1,2"]
+|===
+|Type |JDBC URL Format
+
+|`mysql` |`jdbc:mysql://host:port/database`
+|`postgres` |`jdbc:postgresql://host:port/database`
+|`oracle` |`jdbc:oracle:thin:@//host:port/service_name`
+|`sqlite` |`jdbc:sqlite:path/to/file.db`
+|`microsoft-sql-server` |`jdbc:sqlserver://host:port;databaseName=db;trustServerCertificate=true`
+|===
+
+== Connection Pooling
+
+Each namespace gets its own isolated HikariCP pool. Pool size is controlled per namespace via `sql.properties`.
+
+[source,properties]
+----
+db.prod_mysql.pool.size=5
+----
+
+If not specified, defaults to `5`.
+
+== Error Handling
+
+[cols="2,2"]
+|===
+|Scenario |Exception Message
+
+|Unknown namespace |`Unknown namespace: <namespace>`
+|DB unreachable |`Failed to get connection for namespace: <namespace>`
+|Unsupported type |`Unsupported type: <type>`
+|===
+
+== Tests
+
+Located at `src/test/java/io/sqlnotebook/connection/ConnectionRegistryTest.java`
+
+Uses **Testcontainers** to spin up real database instances per test run.
+
+[cols="2,2"]
+|===
+|Test |What it validates
+
+|`shouldConnectToMysqlNamespace` |MySQL pool returns valid connection
+|`shouldConnectToPostgresNamespace` |Postgres pool returns valid connection
+|`shouldConnectToMssqlNamespace` |MSSQL pool returns valid connection
+|`shouldConnectToOracleNamespace` |Oracle pool returns valid connection
+|`shouldConnectToSqliteNamespace` |SQLite file-based connection works
+|`shouldConnectToBothMysqlAndPostgresIndependently` |Two namespaces are isolated
+|`shouldThrowForUnknownNamespace` |Unknown namespace gives meaningful error
+|`shouldShutdownCleanly` |All pools close without errors
+|===

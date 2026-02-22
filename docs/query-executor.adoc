@@ -1,0 +1,106 @@
+= Query Executor
+:toc: left
+:toclevels: 3
+:source-highlighter: highlight.js
+
+== Overview
+
+The Query Executor is the core execution engine of `sql-notebook`. It takes a namespace and SQL string, fetches a connection from the `ConnectionRegistry`, runs the query on a thread pool, and returns a structured `QueryResult`.
+
+== Classes
+
+=== `QueryResult`
+
+A Java record holding the outcome of a single query execution.
+
+[cols="1,1,2"]
+|===
+|Field |Type |Description
+
+|`namespace` |`String` |Namespace the query ran against
+|`sql` |`String` |The SQL that was executed
+|`columns` |`List<String>` |Column names from the result set
+|`rows` |`List<List<Object>>` |Result rows
+|`executionTimeMs` |`long` |How long the query took in milliseconds
+|`success` |`boolean` |Whether the query succeeded
+|`errorMessage` |`String` |Error detail if success is false, otherwise null
+|===
+
+==== Factory Methods
+
+[source,java]
+----
+// successful result
+QueryResult.success(namespace, sql, columns, rows, executionTimeMs);
+
+// failed result
+QueryResult.failure(namespace, sql, executionTimeMs, errorMessage);
+----
+
+=== `QueryExecutor`
+
+Submits queries to a fixed thread pool and returns a `Future<QueryResult>`.
+
+[source,java]
+----
+QueryExecutor executor = new QueryExecutor(registry, 4);
+Future<QueryResult> future = executor.execute("prod_mysql", "SELECT * FROM users");
+QueryResult result = future.get();
+----
+
+==== Methods
+
+[cols="2,2"]
+|===
+|Method |Description
+
+|`execute(namespace, sql)` |Submits query to thread pool, returns `Future<QueryResult>`
+|`shutdown()` |Shuts down the thread pool cleanly
+|===
+
+=== `QueryExecutorException`
+
+Thrown for executor-level failures such as unknown namespace.
+
+== Parallel Execution
+
+Each call to `execute()` is submitted as an independent task on the thread pool. Multiple cells can run simultaneously without blocking each other.
+
+[source,java]
+----
+Future<QueryResult> f1 = executor.execute("prod_mysql", "SELECT * FROM orders");
+Future<QueryResult> f2 = executor.execute("analytics_pg", "SELECT count(*) FROM events");
+
+QueryResult r1 = f1.get();
+QueryResult r2 = f2.get();
+----
+
+Thread pool size is configured at construction time and should match the namespace pool size.
+
+== Error Handling
+
+Invalid SQL or runtime errors do not throw exceptions — they are captured and returned as a failed `QueryResult`:
+
+[cols="2,2"]
+|===
+|Scenario |Behaviour
+
+|Invalid SQL |`success=false`, `errorMessage` contains DB error
+|Empty result set |`success=true`, `rows` is empty list
+|Unknown namespace |`ConnectionRegistryException` thrown
+|===
+
+== Tests
+
+Located at `src/test/java/io/sqlnotebook/executor/QueryExecutorTest.java`
+
+[cols="2,2"]
+|===
+|Test |What it validates
+
+|`shouldReturnColumnsAndRows` |Correct columns and rows returned for valid SELECT
+|`shouldReturnFailureForInvalidSql` |Invalid SQL returns failed QueryResult
+|`shouldReturnEmptyRowsForNoResults` |Empty result set handled correctly
+|`shouldRunTwoQueriesInParallel` |Two parallel queries return independent results
+|`shouldTrackExecutionTime` |Execution time is captured in the result
+|===
