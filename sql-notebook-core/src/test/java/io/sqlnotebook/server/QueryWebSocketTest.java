@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class QueryWebSocketTest {
 
     @Container
-    static PostgreSQLContainer<?> postgres =  new PostgreSQLContainer<>("postgres:13");
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:13");
 
     private HttpServer httpServer;
     private ConnectionRegistry registry;
@@ -42,7 +42,7 @@ class QueryWebSocketTest {
         registry = new ConnectionRegistry(Map.of("test", config));
         executor = new QueryExecutor(registry, 5);
 
-        httpServer = new HttpServer(0,registry, executor);
+        httpServer = new HttpServer(0, registry, executor);
         httpServer.start();
     }
 

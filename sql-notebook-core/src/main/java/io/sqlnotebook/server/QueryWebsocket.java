@@ -9,9 +9,15 @@ import tools.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.concurrent.Future;
 
+/**
+ * WebSocket endpoint for handling real-time database queries.
+ * Allows for asynchronous status updates (e.g., notifying the client when a query starts vs. finishes).
+ */
 @ServerEndpoint("/ws/query")
 public class QueryWebsocket {
-
+    /**
+     * Static executor shared across all websocket instances (one instance per connection).
+     */
     private static QueryExecutor executor;
     private static final ObjectMapper mapper = new ObjectMapper();
 
@@ -25,12 +31,17 @@ public class QueryWebsocket {
     }
 
     @OnOpen
-    public void onOpen(Session session) {}
+    public void onOpen(Session session) {
+    }
 
+    /**
+     * Handles incoming WebSocket messages. Parses the query request and initiates execution.
+     */
     @OnMessage
     public void onMessage(String message, Session session) {
         QueryRequest request;
         try {
+            // Deserialize the incoming JSON message into a QueryRequest object
             request = mapper.readValue(message, QueryRequest.class);
         } catch (Exception e) {
             sendMessage(session, QueryResponse.error("unknown", "Invalid message format: " + e.getMessage()));
@@ -38,9 +49,9 @@ public class QueryWebsocket {
         }
 
         String cellId = request.cellId() != null ? request.cellId() : "unknown";
-
+        // Basic validation for required fields
         if (request.namespace() == null || request.namespace().isBlank()
-            || request.sql() == null || request.sql().isBlank()) {
+                || request.sql() == null || request.sql().isBlank()) {
             sendMessage(session, QueryResponse.error(cellId, "'namespace' and 'sql' are required"));
             return;
         }
@@ -67,13 +78,17 @@ public class QueryWebsocket {
     }
 
     @OnClose
-    public void onClose(Session session, CloseReason reason) {}
+    public void onClose(Session session, CloseReason reason) {
+    }
 
     @OnError
     public void onError(Session session, Throwable thr) {
         sendMessage(session, QueryResponse.error("unknown", "WebSocket error: " + thr.getMessage()));
     }
 
+    /**
+     * Utility to serialize and send a QueryResponse object over the WebSocket.
+     */
     private void sendMessage(Session session, QueryResponse response) {
         if (!session.isOpen()) return;
         try {

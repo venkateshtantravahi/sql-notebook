@@ -7,13 +7,29 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+/**
+ * Utility class to parse database configurations from a .properties file.
+ * It expects keys in the format: db.<namespace>.<field>
+ */
 public class ConfigParser {
 
+    /**
+     * Set of database engines currently supported by the application.
+     */
     private static final Set<String> SUPPORTED_TYPES = Set.of(
             "mysql", "oracle", "postgres", "sqlite", "microsoft-sql-server"
     );
+    /**
+     * Default connection pool size if not explicitly provided in the config.
+     */
     private static final int DEFAULT_POOL_SIZE = 5;
 
+    /**
+     * Reads a property file and converts it into a map of ConnectionConfig objects.
+     * * @param configFile Path to the .properties file.
+     *
+     * @return A Map where the key is the namespace and the value is the configuration.
+     */
     public Map<String, ConnectionConfig> parse(String configFile) {
         Properties props = loadFile(configFile);
 
@@ -26,6 +42,10 @@ public class ConfigParser {
         return result;
     }
 
+    /**
+     * Loads the raw properties from the filesystem.
+     * * @throws ConfigException if the file is missing or unreadable.
+     */
     public Properties loadFile(String configFile) {
         Properties props = new Properties();
         try (FileInputStream fis = new FileInputStream(configFile)) {
@@ -36,6 +56,9 @@ public class ConfigParser {
         return props;
     }
 
+    /**
+     * Organizes flat properties into a nested map structure based on the db.<namespace> prefix.
+     */
     private Map<String, Map<String, String>> groupByNamespace(Properties props) {
         Map<String, Map<String, String>> grouped = new HashMap<>();
         for (String key : props.stringPropertyNames()) {
@@ -51,6 +74,10 @@ public class ConfigParser {
         return grouped;
     }
 
+    /**
+     * Validates and constructs a ConnectionConfig object from the grouped fields.
+     * * @throws ConfigException if required fields are missing or data types are invalid.
+     */
     private ConnectionConfig buildConfig(String namespace, Map<String, String> fields) {
         String type = require(namespace, fields, "type");
         if (!SUPPORTED_TYPES.contains(type)) {
@@ -60,7 +87,7 @@ public class ConfigParser {
         String host = require(namespace, fields, "host");
         String portStr = require(namespace, fields, "port");
         String database = require(namespace, fields, "database");
-        String user  = require(namespace, fields, "user");
+        String user = require(namespace, fields, "user");
         String password = require(namespace, fields, "password");
 
         int port;
@@ -72,9 +99,9 @@ public class ConfigParser {
 
         int poolSize = DEFAULT_POOL_SIZE;
         if (fields.containsKey("pool.size")) {
-            try{
+            try {
                 poolSize = Integer.parseInt(fields.get("pool.size"));
-            } catch (NumberFormatException e){
+            } catch (NumberFormatException e) {
                 throw new ConfigException("Invalid pool size for namespace: " + namespace);
             }
         }

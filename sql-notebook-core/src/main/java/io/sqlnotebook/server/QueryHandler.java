@@ -14,6 +14,9 @@ import java.io.IOException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
+/**
+ * Servlet handling synchronous HTTP POST requests for SQL execution.
+ */
 public class QueryHandler extends HttpServlet {
 
     private final QueryExecutor executor;
@@ -29,6 +32,7 @@ public class QueryHandler extends HttpServlet {
 
         JsonNode body;
         try {
+            // Read raw bytes and parse as JSON
             String rawBody = new String(req.getInputStream().readAllBytes());
             if (rawBody.isBlank()) {
                 resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
@@ -43,7 +47,7 @@ public class QueryHandler extends HttpServlet {
         }
 
         String namespace = body.has("namespace") ? body.get("namespace").asString() : null;
-        String sql =  body.has("sql") ? body.get("sql").asString() : null;
+        String sql = body.has("sql") ? body.get("sql").asString() : null;
 
         if (namespace == null || namespace.isBlank() || sql == null || sql.isBlank()) {
             resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
@@ -52,6 +56,7 @@ public class QueryHandler extends HttpServlet {
         }
 
         try {
+            // Submit and block until the result is ready (synchronous behavior for HTTP)
             Future<QueryResult> future = executor.execute(namespace, sql);
             QueryResult result = future.get();
             resp.setStatus(HttpServletResponse.SC_OK);
@@ -69,5 +74,6 @@ public class QueryHandler extends HttpServlet {
         }
     }
 
-    record ErrorResponse(String error) {}
+    record ErrorResponse(String error) {
+    }
 }

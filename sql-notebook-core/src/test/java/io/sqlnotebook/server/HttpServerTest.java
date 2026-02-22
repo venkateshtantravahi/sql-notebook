@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class HttpServerTest {
 
     @Container
-    static PostgreSQLContainer<?> postgres =  new PostgreSQLContainer<>("postgres:13");
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:13");
 
     private ConnectionRegistry registry;
     private QueryExecutor executor;
@@ -40,7 +40,7 @@ class HttpServerTest {
         client = HttpClient.newHttpClient();
 
         try (var conn = registry.getConnection("pg");
-             var stmt = conn.createStatement())  {
+             var stmt = conn.createStatement()) {
             stmt.execute("CREATE TABLE IF NOT EXISTS users (id INT, name TEXT)");
             stmt.execute("INSERT INTO users VALUES(1, 'Alice'), (2, 'Bob')");
         }
@@ -49,7 +49,7 @@ class HttpServerTest {
     @AfterEach
     void tearDown() throws Exception {
         try (var conn = registry.getConnection("pg");
-        var stmt = conn.createStatement()) {
+             var stmt = conn.createStatement()) {
             stmt.execute("DROP TABLE IF EXISTS users");
         }
         server.stop();
@@ -92,8 +92,8 @@ class HttpServerTest {
     @Test
     void shouldReturn400ForMissingFields() throws Exception {
         String body = """
-                {"namespace":"pg"}
-        """;
+                        {"namespace":"pg"}
+                """;
 
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + PORT + "/query"))
@@ -109,8 +109,8 @@ class HttpServerTest {
     @Test
     void shouldReturn404ForUnknownNamespace() throws Exception {
         String body = """
-                {"namespace":"unknown", "sql":"SELECT 1"}
-        """;
+                        {"namespace":"unknown", "sql":"SELECT 1"}
+                """;
 
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + PORT + "/query"))

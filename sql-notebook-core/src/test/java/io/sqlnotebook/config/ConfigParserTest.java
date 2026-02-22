@@ -48,21 +48,21 @@ public class ConfigParserTest {
     @Test
     void parseTwoConnections() throws IOException {
         Path file = writeProps("""
-         db.local_mysql.type=mysql
-         db.local_mysql.host=localhost
-         db.local_mysql.port=3306
-         db.local_mysql.database=myapp
-         db.local_mysql.user=root
-         db.local_mysql.password=secret
-    
-         db.analytics_pg.type=postgres
-         db.analytics_pg.host=localhost
-         db.analytics_pg.port=5432
-         db.analytics_pg.database=analytics
-         db.analytics_pg.user=analyst
-         db.analytics_pg.password=secret
-         db.analytics_pg.pool.size=10
-        """);
+                 db.local_mysql.type=mysql
+                 db.local_mysql.host=localhost
+                 db.local_mysql.port=3306
+                 db.local_mysql.database=myapp
+                 db.local_mysql.user=root
+                 db.local_mysql.password=secret
+                
+                 db.analytics_pg.type=postgres
+                 db.analytics_pg.host=localhost
+                 db.analytics_pg.port=5432
+                 db.analytics_pg.database=analytics
+                 db.analytics_pg.user=analyst
+                 db.analytics_pg.password=secret
+                 db.analytics_pg.pool.size=10
+                """);
 
         Map<String, ConnectionConfig> result = parser.parse(file.toString());
 
@@ -73,12 +73,12 @@ public class ConfigParserTest {
     @Test
     void throwsOnMissingRequiredFields() throws IOException {
         Path file = writeProps("""
-            db.local_mysql.type=mysql
-            db.local_mysql.port=3306
-            db.local_mysql.database=myapp
-            db.local_mysql.user=root
-            db.local_mysql.password=secret
-        """);
+                    db.local_mysql.type=mysql
+                    db.local_mysql.port=3306
+                    db.local_mysql.database=myapp
+                    db.local_mysql.user=root
+                    db.local_mysql.password=secret
+                """);
 
         ConfigException ex = assertThrows(ConfigException.class, () -> parser.parse(file.toString()));
         assertTrue(ex.getMessage().contains("host"));
@@ -87,13 +87,13 @@ public class ConfigParserTest {
     @Test
     void throwsOnUnsupportedType() throws IOException {
         Path file = writeProps("""
-            db.local_oracle.type=ibm-db2
-            db.local_oracle.host=localhost
-            db.local_oracle.port=1521
-            db.local_oracle.database=myapp
-            db.local_oracle.user=root
-            db.local_oracle.password=secret
-        """);
+                    db.local_oracle.type=ibm-db2
+                    db.local_oracle.host=localhost
+                    db.local_oracle.port=1521
+                    db.local_oracle.database=myapp
+                    db.local_oracle.user=root
+                    db.local_oracle.password=secret
+                """);
         ConfigException ex = assertThrows(ConfigException.class, () -> parser.parse(file.toString()));
         assertTrue(ex.getMessage().contains("Unsupported type"));
     }
@@ -108,13 +108,13 @@ public class ConfigParserTest {
     @Test
     void defaultPoolSizeAppliedWhenMissing() throws IOException {
         Path file = writeProps("""
-            db.local_mysql.type=mysql
-            db.local_mysql.host=localhost
-            db.local_mysql.port=3306
-            db.local_mysql.database=myapp
-            db.local_mysql.user=root
-            db.local_mysql.password=secret
-        """);
+                    db.local_mysql.type=mysql
+                    db.local_mysql.host=localhost
+                    db.local_mysql.port=3306
+                    db.local_mysql.database=myapp
+                    db.local_mysql.user=root
+                    db.local_mysql.password=secret
+                """);
 
         Map<String, ConnectionConfig> result = parser.parse(file.toString());
         assertEquals(5, result.get("local_mysql").poolSize());
