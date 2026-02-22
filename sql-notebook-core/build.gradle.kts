@@ -85,6 +85,34 @@ dependencyAnalysis {
     }
 }
 
+val frontendDir = file("${rootProject.projectDir}/frontend")
+
+val installFrontend by tasks.registering(Exec::class) {
+    description = "Install frontend npm dependencies"
+    group = "frontend"
+    workingDir = frontendDir
+    commandLine("npm", "install")
+    inputs.file("${frontendDir}/package.json")
+    inputs.file("${frontendDir}/package-lock.json")
+    outputs.dir("${frontendDir}/node_modules")
+}
+
+val buildFrontend by tasks.registering(Exec::class) {
+    description = "Build frontend with Vite"
+    group = "frontend"
+    workingDir = frontendDir
+    commandLine("npm", "run", "build")
+    dependsOn(installFrontend)
+    inputs.dir("${frontendDir}/src")
+    inputs.file("${frontendDir}/index.html")
+    inputs.file("${frontendDir}/vite.config.js")
+    outputs.dir("${rootProject.projectDir}/sql-notebook-core/src/main/resources/static")
+}
+
+tasks.named("processResources") {
+    dependsOn(buildFrontend)
+}
+
 // Apply a specific Java toolchain to ease working on different environments.
 java {
     toolchain {
