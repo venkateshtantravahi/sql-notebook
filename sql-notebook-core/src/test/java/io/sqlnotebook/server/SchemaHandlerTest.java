@@ -112,7 +112,7 @@ class SchemaHandlerTest {
         assertEquals(200, resp.statusCode());
 
         JsonNode root = mapper.readTree(resp.body());
-        assertEquals("mysql_ns", root.get("namespace").asText());
+        assertEquals("mysql_ns", root.get("namespace").asString());
 
         JsonNode tables = root.get("tables");
         assertTrue(tables.isArray());
@@ -163,7 +163,7 @@ class SchemaHandlerTest {
         assertEquals(200, resp.statusCode());
 
         JsonNode root = mapper.readTree(resp.body());
-        assertEquals("pg_ns", root.get("namespace").asText());
+        assertEquals("pg_ns", root.get("namespace").asString());
 
         JsonNode tables = root.get("tables");
         JsonNode products = findTable(tables, "products");
@@ -205,7 +205,7 @@ class SchemaHandlerTest {
 
     private JsonNode findTable(JsonNode tables, String name) {
         for (JsonNode table : tables) {
-            if (table.get("name").asText().equalsIgnoreCase(name)) {
+            if (table.get("name").asString().equalsIgnoreCase(name)) {
                 return table;
             }
         }
@@ -214,7 +214,7 @@ class SchemaHandlerTest {
 
     private JsonNode findColumn(JsonNode columns, String name) {
         for (JsonNode col : columns) {
-            if (col.get("name").asText().equalsIgnoreCase(name)) {
+            if (col.get("name").asString().equalsIgnoreCase(name)) {
                 return col;
             }
         }
