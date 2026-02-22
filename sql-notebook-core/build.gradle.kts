@@ -9,6 +9,7 @@
 plugins {
     // Apply the application plugin to add support for building a CLI application in Java.
     application
+//    id("com.autonomousapps.dependency-analysis") version "3.5.1"
 }
 
 repositories {
@@ -70,6 +71,16 @@ testing {
         val test by getting(JvmTestSuite::class) {
             // Use JUnit Jupiter test framework
             useJUnitJupiter("5.12.1")
+        }
+    }
+}
+
+dependencyAnalysis {
+    issues {
+        allprojects {
+            onAny {
+                severity("warn")
+            }
         }
     }
 }
