@@ -32,6 +32,7 @@ public class HttpServer {
         // Register traditional HTTP Servlets
         context.addServlet(new ServletHolder(new NamespaceHandler(registry)), "/namespaces");
         context.addServlet(new ServletHolder(new QueryHandler(executor)), "/query");
+        context.addServlet(new ServletHolder(new SchemaHandler(registry)),  "/schema/*");
         // Initialize Jakarta WebSocket support for Jetty
         JakartaWebSocketServletContainerInitializer.configure(context, (servletContext, wsContainer) -> {
             wsContainer.setDefaultMaxTextMessageBufferSize(65535);

@@ -1,3 +1,4 @@
+import SchemaExplorer from "../sidebar/SchemaExplorer.jsx";
 
 function Sidebar() {
     return (
@@ -7,22 +8,18 @@ function Sidebar() {
       border-r border-gray-200 dark:border-gray-800
       flex flex-col overflow-hidden
     ">
-            {/* Schema Explorer section */}
+            {/* Schema Explorer */}
             <div className="flex-1 overflow-y-auto">
-                <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-800">
+                <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-gray-50 dark:bg-gray-900 z-10">
           <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
             Schema Explorer
           </span>
                 </div>
-                <div className="p-3">
-                    <p className="text-xs text-gray-400 dark:text-gray-600 italic">
-                        Connect a database to explore schema
-                    </p>
-                </div>
+                <SchemaExplorer />
             </div>
 
-            {/* Pinned Datasets section */}
-            <div className="border-t border-gray-200 dark:border-gray-800">
+            {/* Pinned Datasets */}
+            <div className="border-t border-gray-200 dark:border-gray-800 flex-shrink-0">
                 <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-800">
           <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
             Pinned Datasets
