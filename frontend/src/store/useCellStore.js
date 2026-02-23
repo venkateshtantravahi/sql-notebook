@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 let nextId = 1
 
-function makeCell() {
+function makeCell(overrides = {}) {
     return {
         id:        nextId++,
         query:     '',
@@ -10,10 +10,11 @@ function makeCell() {
         status:    'idle',   // idle | running | done | error
         results:   null,     // { columns: [], rows: [], rowCount, duration }
         error:     null,
+        ...overrides,
     }
 }
 
-const useCellStore = create((set) => ({
+const useCellStore = create((set, get) => ({
     cells: [],
 
     addCell: () => set(state => ({
@@ -49,6 +50,29 @@ const useCellStore = create((set) => ({
             c.id === id ? { ...c, status: 'error', error } : c
         )
     })),
+
+    // Returns a serialisable snapshot of current cells for notebook save
+    getSnapshot: () => {
+        return get().cells.map(c => ({
+            id:        c.id,
+            query:     c.query,
+            namespace: c.namespace,
+        }))
+    },
+
+    // Loads cells from a saved snapshot — resets results/status
+    loadSnapshot: (snapshots) => {
+        const cells = snapshots.map(s => makeCell({
+            id:        s.id,
+            query:     s.query,
+            namespace: s.namespace,
+        }))
+        // Keep nextId above any loaded id to avoid collisions
+        nextId = Math.max(...cells.map(c => c.id), nextId) + 1
+        set({ cells })
+    },
+
+    clearCells: () => set({ cells: [] }),
 }))
 
 export default useCellStore

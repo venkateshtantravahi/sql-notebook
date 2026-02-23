@@ -1,5 +1,22 @@
+import { useState, useEffect } from 'react'
 
 function BottomBar() {
+    const [namespaces, setNamespaces] = useState([])
+
+    useEffect(() => {
+        function fetchNs() {
+            fetch('/namespaces')
+                .then(r => r.ok ? r.json() : [])
+                .then(setNamespaces)
+                .catch(() => setNamespaces([]))
+        }
+
+        fetchNs()
+        // Re-poll every 30 seconds so new connections appear without refresh
+        const interval = setInterval(fetchNs, 30000)
+        return () => clearInterval(interval)
+    }, [])
+
     return (
         <footer className="
       fixed bottom-0 left-0 right-0 h-10
@@ -11,19 +28,23 @@ function BottomBar() {
         Namespace Health
       </span>
 
-            {/* Placeholder namespace indicators */}
             <div className="flex items-center gap-4">
-                {['prod', 'staging', 'local'].map((ns) => (
-                    <div key={ns} className="flex items-center gap-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-600" />
-                        <span className="text-xs text-gray-400 dark:text-gray-600 font-mono">
-              {ns}
-            </span>
-                    </div>
-                ))}
+                {namespaces.length === 0 ? (
+                    <span className="text-xs text-gray-300 dark:text-gray-700 italic">
+            No connections configured
+          </span>
+                ) : (
+                    namespaces.map(ns => (
+                        <div key={ns} className="flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                {ns}
+              </span>
+                        </div>
+                    ))
+                )}
             </div>
 
-            {/* Right side — version */}
             <div className="ml-auto">
         <span className="text-xs text-gray-300 dark:text-gray-700 font-mono">
           v0.1.0

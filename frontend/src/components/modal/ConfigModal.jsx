@@ -19,7 +19,7 @@ const EMPTY_FORM = {
     database:  '',
     username:  '',
     password:  '',
-    poolSize:  '10',
+    // poolSize:  '10',
 }
 
 // ── small input component ────────────────────────────────────────────────────
@@ -79,8 +79,8 @@ function validate(form) {
     if (!form.database.trim())
         errors.database = form.type === 'sqlite' ? 'File path is required' : 'Database name is required'
 
-    if (!form.poolSize || isNaN(form.poolSize) || +form.poolSize < 1 || +form.poolSize > 50)
-        errors.poolSize = 'Pool size must be between 1 and 50'
+    // if (!form.poolSize || isNaN(form.poolSize) || +form.poolSize < 1 || +form.poolSize > 50)
+    //     errors.poolSize = 'Pool size must be between 1 and 50'
 
     return errors
 }
@@ -305,15 +305,15 @@ function ConfigModal() {
                         </div>
                     )}
 
-                    {/* Pool size */}
-                    <Field label="Connection pool size" error={errors.poolSize}>
-                        <Input
-                            type="number"
-                            placeholder="10"
-                            value={form.poolSize}
-                            onChange={e => handleChange('poolSize', e.target.value)}
-                        />
-                    </Field>
+                    {/*/!* Pool size *!/*/}
+                    {/*<Field label="Connection pool size" error={errors.poolSize}>*/}
+                    {/*    <Input*/}
+                    {/*        type="number"*/}
+                    {/*        placeholder="10"*/}
+                    {/*        value={form.poolSize}*/}
+                    {/*        onChange={e => handleChange('poolSize', e.target.value)}*/}
+                    {/*    />*/}
+                    {/*</Field>*/}
 
                     {/* Status message */}
                     {statusMsg && (

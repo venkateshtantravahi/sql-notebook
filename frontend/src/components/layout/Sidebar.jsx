@@ -1,6 +1,10 @@
 import SchemaExplorer from "../sidebar/SchemaExplorer.jsx";
+import useSidebarStore from '../../store/useSidebarStore.js'
 
 function Sidebar() {
+    const { isOpen } = useSidebarStore()
+
+    if (!isOpen) return null
     return (
         <aside className="
       fixed top-12 left-0 bottom-10 w-64
