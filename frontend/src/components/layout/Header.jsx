@@ -1,38 +1,49 @@
-import { useState, useRef, useEffect } from "react";
-import useThemeStore from "../../store/useThemeStore.js";
-import useConfigModalStore from "../../store/useConfigModalStore.js";
+import { useState, useEffect, useRef } from 'react'
+import useThemeStore        from '../../store/useThemeStore.js'
+import useConfigModalStore  from '../../store/useConfigModalStore.js'
+import useSidebarStore      from '../../store/useSidebarStore.js'
+import useZoomStore         from '../../store/useZoomStore.js'
+import useNotebookStore     from '../../store/useNotebookStore.js'
+import useCellStore         from '../../store/useCellStore.js'
+import KeyboardShortcutsModal from '../modal/KeyboardShortcutsModal.jsx'
+import AboutModal             from '../modal/AboutModal.jsx'
 
+// ── menu definitions ─────────────────────────────────────────────────────────
 
-// ── dropdown menu ────────────────────────────────────────────────────────────
-
-const MENUS = {
-    File: [
-        { label: 'New Notebook',     shortcut: '⌘N' },
-        { label: 'Open...',          shortcut: '⌘O' },
-        { divider: true },
-        { label: 'Save',             shortcut: '⌘S' },
-        { label: 'Export Results',   shortcut: '⌘E' },
-    ],
-    View: [
-        { label: 'Toggle Sidebar',   shortcut: '⌘B' },
-        { label: 'Toggle Theme',     shortcut: '⌘⇧T' },
-        { divider: true },
-        { label: 'Zoom In',          shortcut: '⌘+' },
-        { label: 'Zoom Out',         shortcut: '⌘-' },
-        { label: 'Reset Zoom',       shortcut: '⌘0' },
-    ],
-    Help: [
-        { label: 'Documentation'                    },
-        { label: 'Keyboard Shortcuts', shortcut: '⌘/' },
-        { divider: true },
-        { label: 'About sql-notebook'               },
-    ],
+function buildMenus(actions) {
+    return {
+        File: [
+            { label: 'New Notebook',     shortcut: '⌘N',   action: actions.newNotebook    },
+            { label: 'Open Notebook...',  shortcut: '⌘O',   action: actions.openNotebook   },
+            { divider: true },
+            { label: 'Save',             shortcut: '⌘S',   action: actions.save           },
+            { label: 'Save As...',       shortcut: '⌘⇧S',  action: actions.saveAs         },
+            { label: 'Rename',                              action: actions.rename         },
+            { divider: true },
+            { label: 'Export Notebook As...', action: actions.exportNotebook },
+        ],
+        View: [
+            { label: 'Toggle Sidebar',   shortcut: '⌘B',   action: actions.toggleSidebar  },
+            { label: 'Toggle Theme',     shortcut: '⌘⇧T',  action: actions.toggleTheme    },
+            { divider: true },
+            { label: 'Zoom In',          shortcut: '⌘+',   action: actions.zoomIn         },
+            { label: 'Zoom Out',         shortcut: '⌘−',   action: actions.zoomOut        },
+            { label: 'Reset Zoom',       shortcut: '⌘0',   action: actions.resetZoom      },
+        ],
+        Help: [
+            { label: 'Documentation',                       action: actions.docs           },
+            { label: 'Keyboard Shortcuts', shortcut: '⌘/', action: actions.shortcuts      },
+            { divider: true },
+            { label: 'About sql-notebook',                  action: actions.about          },
+        ],
+    }
 }
+
+// ── dropdown component ───────────────────────────────────────────────────────
 
 function Dropdown({ label, items, open, onToggle, onClose }) {
     const ref = useRef(null)
 
-    // Close on outside click
     useEffect(() => {
         if (!open) return
         function handle(e) {
@@ -60,23 +71,17 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
             {open && (
                 <div className="
           absolute top-full left-0 mt-1 z-50
-          min-w-48 py-1 rounded-md shadow-lg
+          min-w-52 py-1 rounded-md shadow-lg
           bg-white dark:bg-gray-800
           border border-gray-200 dark:border-gray-700
         ">
                     {items.map((item, i) =>
                             item.divider ? (
-                                <div
-                                    key={i}
-                                    className="my-1 border-t border-gray-100 dark:border-gray-700"
-                                />
+                                <div key={i} className="my-1 border-t border-gray-100 dark:border-gray-700" />
                             ) : (
                                 <button
                                     key={item.label}
-                                    onClick={() => {
-                                        // TODO: wire up actions in feat/header-actions
-                                        onClose()
-                                    }}
+                                    onClick={() => { item.action?.(); onClose() }}
                                     className="
                   w-full flex items-center justify-between
                   px-3 py-1.5 text-xs
@@ -101,74 +106,245 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
     )
 }
 
+// ── editable notebook title ──────────────────────────────────────────────────
+
+function NotebookTitle() {
+    const { title, isDirty, setTitle } = useNotebookStore()
+    const [editing, setEditing] = useState(false)
+    const [draft,   setDraft  ] = useState(title)
+    const inputRef = useRef(null)
+
+    useEffect(() => {
+        if (editing) {
+            setDraft(title)
+            setTimeout(() => inputRef.current?.select(), 0)
+        }
+    }, [editing, title])
+
+    function commit() {
+        const trimmed = draft.trim()
+        if (trimmed) setTitle(trimmed)
+        setEditing(false)
+    }
+
+    function handleKeyDown(e) {
+        if (e.key === 'Enter')  commit()
+        if (e.key === 'Escape') setEditing(false)
+    }
+
+    if (editing) {
+        return (
+            <input
+                ref={inputRef}
+                value={draft}
+                onChange={e => setDraft(e.target.value)}
+                onBlur={commit}
+                onKeyDown={handleKeyDown}
+                className="
+          text-sm font-medium text-center
+          bg-transparent border-b border-blue-500
+          text-gray-800 dark:text-gray-100
+          focus:outline-none w-48
+        "
+            />
+        )
+    }
+
+    return (
+        <button
+            onClick={() => setEditing(true)}
+            className="
+        flex items-center gap-1.5 group
+        text-sm font-medium
+        text-gray-600 dark:text-gray-300
+        hover:text-gray-900 dark:hover:text-gray-100
+        transition-colors
+      "
+            title="Click to rename"
+        >
+            <span>{title}</span>
+            {isDirty && (
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Unsaved changes" />
+            )}
+            <span className="
+        text-gray-300 dark:text-gray-600
+        group-hover:text-gray-400 dark:group-hover:text-gray-500
+        text-xs transition-colors
+      ">
+        ✎
+      </span>
+        </button>
+    )
+}
+
+// ── main header ──────────────────────────────────────────────────────────────
 
 function Header() {
-    const { theme, toggleTheme } = useThemeStore()
-    const [openMenu, setOpenMenu] = useState(null)
-    const { open } = useConfigModalStore()
+    const { theme, toggleTheme }   = useThemeStore()
+    const { open: openConfig }     = useConfigModalStore()
+    const { toggle: toggleSidebar } = useSidebarStore()
+    const { zoomIn, zoomOut, reset: resetZoom } = useZoomStore()
+    const { save, load, newNotebook: newNb, setTitle } = useNotebookStore()
+    const { getSnapshot, loadSnapshot, clearCells } = useCellStore()
+
+    const [openMenu,       setOpenMenu      ] = useState(null)
+    const [showShortcuts,  setShowShortcuts ] = useState(false)
+    const [showAbout,      setShowAbout     ] = useState(false)
+
+    // ── global keyboard shortcuts ──────────────────────────────────────────────
+    useEffect(() => {
+        function handle(e) {
+            const mod = e.metaKey || e.ctrlKey
+            if (!mod) return
+
+            if (e.key === 'b') { e.preventDefault(); toggleSidebar() }
+            if (e.key === 's' && !e.shiftKey) { e.preventDefault(); handleSave() }
+            if (e.key === '=') { e.preventDefault(); zoomIn()   }
+            if (e.key === '-') { e.preventDefault(); zoomOut()  }
+            if (e.key === '0') { e.preventDefault(); resetZoom()}
+            if (e.key === '/') { e.preventDefault(); setShowShortcuts(true) }
+            if (e.key === 'n') { e.preventDefault(); handleNew() }
+        }
+        document.addEventListener('keydown', handle)
+        return () => document.removeEventListener('keydown', handle)
+    }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+    // ── actions ────────────────────────────────────────────────────────────────
+
+    function handleSave() {
+        const snapshots = getSnapshot()
+        save(snapshots)
+    }
+
+    function handleNew() {
+        if (window.confirm('Start a new notebook? Unsaved changes will be lost.')) {
+            newNb()
+            clearCells()
+        }
+    }
+
+    function handleOpen() {
+        const data = load()
+        if (!data) {
+            alert('No saved notebook found.')
+            return
+        }
+        if (window.confirm(`Load "${data.title}"? Current cells will be replaced.`)) {
+            setTitle(data.title)
+            loadSnapshot(data.cells ?? [])
+        }
+    }
+
+    function handleExportNotebook() {
+        const snapshots = getSnapshot()
+        const data = { title: useNotebookStore.getState().title, cells: snapshots }
+        const blob = URL.createObjectURL(
+            new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+        )
+        const a = Object.assign(document.createElement('a'), {
+            href: blob,
+            download: `${data.title.replace(/\s+/g, '-')}.sqlnb.json`,
+        })
+        a.click()
+        URL.revokeObjectURL(blob)
+    }
+
+    // ── menu definitions with wired actions ───────────────────────────────────
+
+    const MENUS = buildMenus({
+        newNotebook:    handleNew,
+        openNotebook:   handleOpen,
+        save:           handleSave,
+        saveAs:         handleSave, // TODO: prompt for new name in feat/file-io
+        rename:         () => {}, // handled inline by NotebookTitle click
+        exportNotebook: handleExportNotebook,
+        toggleSidebar,
+        toggleTheme,
+        zoomIn,
+        zoomOut,
+        resetZoom,
+        docs:           () => window.open('https://github.com/venkateshtantravahi/sql-notebook', '_blank'),
+        shortcuts:      () => setShowShortcuts(true),
+        about:          () => setShowAbout(true),
+    })
 
     function toggle(label) {
         setOpenMenu(prev => prev === label ? null : label)
     }
+
     return (
-        <header className="
-      fixed top-0 left-0 right-0 z-50 h-12
-      flex items-center justify-between px-4
-      bg-white dark:bg-gray-900
-      border-b border-gray-200 dark:border-gray-800
-    ">
-            {/* Left — logo + app name */}
-            <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded bg-blue-600 flex items-center justify-center flex-shrink-0">
-                    <span className="text-white text-xs font-bold">S</span>
+        <>
+            <header className="
+        fixed top-0 left-0 right-0 z-50 h-12
+        flex items-center justify-between px-4
+        bg-white dark:bg-gray-900
+        border-b border-gray-200 dark:border-gray-800
+      ">
+                {/* Left — logo + app name */}
+                <div className="flex items-center gap-2 w-40">
+                    <div className="w-5 h-5 rounded bg-blue-600 flex items-center justify-center flex-shrink-0">
+                        <span className="text-white text-xs font-bold">S</span>
+                    </div>
+                    <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 tracking-wide whitespace-nowrap">
+            sql-notebook
+          </span>
                 </div>
-                <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 tracking-wide">
-          sql-notebook
-        </span>
-            </div>
 
-            {/* Center — dropdown menus */}
-            <div className="flex items-center gap-0.5">
-                {Object.entries(MENUS).map(([label, items]) => (
-                    <Dropdown
-                        key={label}
-                        label={label}
-                        items={items}
-                        open={openMenu === label}
-                        onToggle={() => toggle(label)}
-                        onClose={() => setOpenMenu(null)}
-                    />
-                ))}
-            </div>
+                {/* Center — notebook title + menus */}
+                <div className="flex flex-col items-center gap-0.5">
+                    <NotebookTitle />
+                    <div className="flex items-center gap-0.5">
+                        {Object.entries(MENUS).map(([label, items]) => (
+                            <Dropdown
+                                key={label}
+                                label={label}
+                                items={items}
+                                open={openMenu === label}
+                                onToggle={() => toggle(label)}
+                                onClose={() => setOpenMenu(null)}
+                            />
+                        ))}
+                    </div>
+                </div>
 
-            {/* Right — theme toggle + config button */}
-            <div className="flex items-center gap-2">
-                <button
-                    onClick={toggleTheme}
-                    className="
-            text-xs px-3 py-1.5 rounded transition-colors
-            text-gray-500 dark:text-gray-400
-            hover:bg-gray-100 dark:hover:bg-gray-800
-            hover:text-gray-700 dark:hover:text-gray-200
-          "
-                >
-                    {theme === 'dark' ? '☀ Light' : '☾ Dark'}
-                </button>
+                {/* Right — theme toggle + config */}
+                <div className="flex items-center gap-2 w-40 justify-end">
+                    <button
+                        onClick={toggleTheme}
+                        className="
+              text-xs px-3 py-1.5 rounded transition-colors
+              text-gray-500 dark:text-gray-400
+              hover:bg-gray-100 dark:hover:bg-gray-800
+              hover:text-gray-700 dark:hover:text-gray-200
+            "
+                    >
+                        {theme === 'dark' ? '☀ Light' : '☾ Dark'}
+                    </button>
 
-                <button
-                    onClick={open}
-                    className="
-            text-xs px-3 py-1.5 rounded transition-colors
-            bg-blue-600 hover:bg-blue-500
-            text-white font-medium
-            flex items-center gap-1.5
-          "
-                >
-                    <span>⚙</span>
-                    <span>Config</span>
-                </button>
-            </div>
-        </header>
+                    <button
+                        onClick={openConfig}
+                        className="
+              text-xs px-3 py-1.5 rounded transition-colors
+              bg-blue-600 hover:bg-blue-500
+              text-white font-medium
+              flex items-center gap-1.5
+            "
+                    >
+                        <span>⚙</span>
+                        <span>Config</span>
+                    </button>
+                </div>
+            </header>
+
+            <KeyboardShortcutsModal
+                isOpen={showShortcuts}
+                onClose={() => setShowShortcuts(false)}
+            />
+            <AboutModal
+                isOpen={showAbout}
+                onClose={() => setShowAbout(false)}
+            />
+        </>
     )
 }
 

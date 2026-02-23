@@ -1,17 +1,24 @@
-import useCellStore from '../../store/useCellStore.js'
-import SqlCell from '../cell/SqlCell.jsx'
+import useCellStore   from '../../store/useCellStore.js'
+import useSidebarStore from '../../store/useSidebarStore.js'
+import useZoomStore   from '../../store/useZoomStore.js'
+import SqlCell        from '../cell/SqlCell.jsx'
 
 function MainArea() {
-    const { cells, addCell } = useCellStore()
+    const { cells, addCell }  = useCellStore()
+    const { isOpen: sidebar } = useSidebarStore()
+    const { level }           = useZoomStore()
 
     return (
-        <main className="
-      absolute top-12 left-64 right-0 bottom-10
-      overflow-y-auto
-      bg-gray-50 dark:bg-gray-950
-    ">
+        <main
+            style={{ fontSize: `${level}em` }}
+            className={`
+        absolute top-12 bottom-10 right-0 overflow-y-auto
+        bg-gray-50 dark:bg-gray-950
+        transition-all duration-200
+        ${sidebar ? 'left-64' : 'left-0'}
+      `}
+        >
             {cells.length === 0 ? (
-                /* Empty state */
                 <div className="flex flex-col items-center justify-center h-full gap-3">
                     <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
                         <span className="text-white text-lg font-bold">S</span>
@@ -34,13 +41,10 @@ function MainArea() {
                     </button>
                 </div>
             ) : (
-                /* Cell list */
                 <div className="p-6 flex flex-col gap-4 max-w-4xl mx-auto">
                     {cells.map(cell => (
                         <SqlCell key={cell.id} cell={cell} />
                     ))}
-
-                    {/* Add cell button */}
                     <button
                         onClick={addCell}
                         className="
