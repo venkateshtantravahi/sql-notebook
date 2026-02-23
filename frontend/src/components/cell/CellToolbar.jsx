@@ -1,6 +1,5 @@
+import { useState, useEffect } from 'react'
 import useZoomStore from '../../store/useZoomStore.js'
-
-const NAMESPACES = ['prod_mysql', 'analytics_pg', 'local_sqlite']
 
 function exportCSV(results) {
     if (!results) return
@@ -31,9 +30,18 @@ function download(content, filename, type) {
 }
 
 function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
-    const { level } = useZoomStore()
+    const { level }  = useZoomStore()
+    const [namespaces, setNamespaces] = useState([])
     const isRunning  = cell.status === 'running'
     const hasResults = cell.status === 'done' && cell.results
+
+    // Fetch live namespaces from backend
+    useEffect(() => {
+        fetch('/namespaces')
+            .then(r => r.ok ? r.json() : [])
+            .then(setNamespaces)
+            .catch(() => setNamespaces([]))
+    }, [])
 
     return (
         <div
@@ -59,26 +67,26 @@ function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
           transition-colors
         "
             >
-                <option value="" disabled>Select namespace</option>
-                {NAMESPACES.map(ns => (
+                <option value="" disabled>
+                    {namespaces.length === 0 ? 'No namespaces — click ⚙ Config' : 'Select namespace'}
+                </option>
+                {namespaces.map(ns => (
                     <option key={ns} value={ns}>{ns}</option>
                 ))}
             </select>
 
             {/* Right — export + run + delete */}
             <div className="flex items-center gap-2">
-
-                {/* Export buttons — only visible when results exist */}
                 {hasResults && (
                     <div className="flex items-center gap-1 mr-1">
                         <button
                             onClick={() => exportCSV(cell.results)}
                             className="
-                text-xs px-2 py-1 rounded
+                text-xs px-2 py-1 rounded font-mono
                 text-gray-500 dark:text-gray-400
                 hover:bg-gray-200 dark:hover:bg-gray-700
                 hover:text-gray-700 dark:hover:text-gray-200
-                transition-colors font-mono
+                transition-colors
               "
                             title="Export as CSV"
                         >
@@ -87,11 +95,11 @@ function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
                         <button
                             onClick={() => exportJSON(cell.results)}
                             className="
-                text-xs px-2 py-1 rounded
+                text-xs px-2 py-1 rounded font-mono
                 text-gray-500 dark:text-gray-400
                 hover:bg-gray-200 dark:hover:bg-gray-700
                 hover:text-gray-700 dark:hover:text-gray-200
-                transition-colors font-mono
+                transition-colors
               "
                             title="Export as JSON"
                         >
@@ -100,7 +108,6 @@ function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
                     </div>
                 )}
 
-                {/* Run button */}
                 <button
                     onClick={onRun}
                     disabled={isRunning || !cell.namespace}
@@ -118,7 +125,6 @@ function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
                     }
                 </button>
 
-                {/* Delete button */}
                 <button
                     onClick={onDelete}
                     className="

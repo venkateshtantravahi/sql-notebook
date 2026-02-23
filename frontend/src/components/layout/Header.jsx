@@ -108,22 +108,26 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
 
 // ── editable notebook title ──────────────────────────────────────────────────
 
-function NotebookTitle() {
+function NotebookTitle({ onRename, editTriggerRef }) {
     const { title, isDirty, setTitle } = useNotebookStore()
     const [editing, setEditing] = useState(false)
     const [draft,   setDraft  ] = useState(title)
     const inputRef = useRef(null)
 
     useEffect(() => {
-        if (editing) {
-            setDraft(title)
-            setTimeout(() => inputRef.current?.select(), 0)
+        if (editTriggerRef) {
+            // setDraft(title)
+            // setTimeout(() => inputRef.current?.select(), 0)
+            editTriggerRef.current = () => setEditing(true)
         }
-    }, [editing, title])
+    }, [editTriggerRef])
 
     function commit() {
         const trimmed = draft.trim()
-        if (trimmed) setTitle(trimmed)
+        if (trimmed && trimmed !== title) {
+            setTitle(trimmed)
+            onRename?.()
+        }
         setEditing(false)
     }
 
@@ -186,6 +190,7 @@ function Header() {
     const { zoomIn, zoomOut, reset: resetZoom } = useZoomStore()
     const { save, load, newNotebook: newNb, setTitle } = useNotebookStore()
     const { getSnapshot, loadSnapshot, clearCells } = useCellStore()
+    const titleEditRef = useRef(null)
 
     const [openMenu,       setOpenMenu      ] = useState(null)
     const [showShortcuts,  setShowShortcuts ] = useState(false)
@@ -209,11 +214,69 @@ function Header() {
         return () => document.removeEventListener('keydown', handle)
     }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+    // ── .sqlnb file format helpers ─────────────────────────────────────────────
+
+    async function writeSqlnbFile(fileHandle, data) {
+        const writable = await fileHandle.createWritable()
+        await writable.write(JSON.stringify(data, null, 2))
+        await writable.close()
+    }
+
+    function buildSqlnb(title, cellSnapshots) {
+        return {
+            version:   '1',
+            title,
+            savedAt:   new Date().toISOString(),
+            cells:     cellSnapshots,
+        }
+    }
+
     // ── actions ────────────────────────────────────────────────────────────────
 
-    function handleSave() {
+    const fileHandleRef = useRef(null)
+
+    async function handleSave() {
         const snapshots = getSnapshot()
-        save(snapshots)
+        const { title } = useNotebookStore.getState()
+        const data = buildSqlnb(title, snapshots)
+
+        try {
+            if (!fileHandleRef.current) {
+                // First save — show save dialog
+                fileHandleRef.current = await window.showSaveFilePicker({
+                    suggestedName: `${title.replace(/\s+/g, '-')}.sqlnb`,
+                    types: [{
+                        description: 'SQL Notebook',
+                        accept: { 'application/x-sqlnotebook': ['.sqlnb'] },
+                    }],
+                })
+            }
+            await writeSqlnbFile(fileHandleRef.current, data)
+            save(snapshots)
+        } catch (err) {
+            if (err.name !== 'AbortError') console.error('Save failed', err)
+        }
+    }
+
+    async function handleSaveAs() {
+        const snapshots = getSnapshot()
+        const { title } = useNotebookStore.getState()
+        const data = buildSqlnb(title, snapshots)
+
+        try {
+            const handle = await window.showSaveFilePicker({
+                suggestedName: `${title.replace(/\s+/g, '-')}.sqlnb`,
+                types: [{
+                    description: 'SQL Notebook',
+                    accept: { 'application/x-sqlnotebook': ['.sqlnb'] },
+                }],
+            })
+            fileHandleRef.current = handle
+            await writeSqlnbFile(handle, data)
+            save(snapshots)
+        } catch (err) {
+            if (err.name !== 'AbortError') console.error('Save As failed', err)
+        }
     }
 
     function handleNew() {
@@ -223,30 +286,45 @@ function Header() {
         }
     }
 
-    function handleOpen() {
-        const data = load()
-        if (!data) {
-            alert('No saved notebook found.')
-            return
-        }
-        if (window.confirm(`Load "${data.title}"? Current cells will be replaced.`)) {
-            setTitle(data.title)
-            loadSnapshot(data.cells ?? [])
+    async function handleOpen() {
+        try {
+            const [handle] = await window.showOpenFilePicker({
+                types: [{
+                    description: 'SQL Notebook',
+                    accept: {'application/x-sqlnotebook': ['.sqlnb']},
+                }],
+            })
+            const file = await handle.getFile()
+            const text = await file.text()
+            const data = JSON.parse(text)
+
+            if (window.confirm(`Load "${data.title}"? Current cells will be replaced.`)) {
+                fileHandleRef.current = handle
+                setTitle(data.title)
+                loadSnapshot(data.cells ?? [])
+            }
+        } catch (err) {
+            if (err.name !== 'AbortError') console.error('Open failed', err)
         }
     }
 
-    function handleExportNotebook() {
+    async function handleExportNotebook() {
         const snapshots = getSnapshot()
-        const data = { title: useNotebookStore.getState().title, cells: snapshots }
-        const blob = URL.createObjectURL(
-            new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-        )
-        const a = Object.assign(document.createElement('a'), {
-            href: blob,
-            download: `${data.title.replace(/\s+/g, '-')}.sqlnb.json`,
-        })
-        a.click()
-        URL.revokeObjectURL(blob)
+        const { title } = useNotebookStore.getState()
+        const data = buildSqlnb(title, snapshots)
+
+        try {
+            const handle = await window.showSaveFilePicker({
+                suggestedName: `${title.replace(/\s+/g, '-')}.sqlnb`,
+                types: [{
+                    description: 'SQL Notebook',
+                    accept: { 'application/x-sqlnotebook': ['.sqlnb'] },
+                }],
+            })
+            await writeSqlnbFile(handle, data)
+        } catch (err) {
+            if (err.name !== 'AbortError') console.error('Export failed', err)
+        }
     }
 
     // ── menu definitions with wired actions ───────────────────────────────────
@@ -255,8 +333,8 @@ function Header() {
         newNotebook:    handleNew,
         openNotebook:   handleOpen,
         save:           handleSave,
-        saveAs:         handleSave, // TODO: prompt for new name in feat/file-io
-        rename:         () => {}, // handled inline by NotebookTitle click
+        saveAs:         handleSaveAs,
+        rename:         () => titleEditRef.current?.(),
         exportNotebook: handleExportNotebook,
         toggleSidebar,
         toggleTheme,
@@ -290,21 +368,23 @@ function Header() {
           </span>
                 </div>
 
-                {/* Center — notebook title + menus */}
-                <div className="flex flex-col items-center gap-0.5">
-                    <NotebookTitle />
-                    <div className="flex items-center gap-0.5">
-                        {Object.entries(MENUS).map(([label, items]) => (
-                            <Dropdown
-                                key={label}
-                                label={label}
-                                items={items}
-                                open={openMenu === label}
-                                onToggle={() => toggle(label)}
-                                onClose={() => setOpenMenu(null)}
-                            />
-                        ))}
-                    </div>
+                {/* Center — notebook title inline with menus */}
+                <div className="flex items-center gap-1">
+                    <NotebookTitle
+                        onRename={() => { fileHandleRef.current = null }}
+                        editTriggerRef={titleEditRef}
+                    />
+                    <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
+                    {Object.entries(MENUS).map(([label, items]) => (
+                        <Dropdown
+                            key={label}
+                            label={label}
+                            items={items}
+                            open={openMenu === label}
+                            onToggle={() => toggle(label)}
+                            onClose={() => setOpenMenu(null)}
+                        />
+                    ))}
                 </div>
 
                 {/* Right — theme toggle + config */}

@@ -7,6 +7,7 @@ import useThemeStore from '../../store/useThemeStore.js'
 import useCellStore from '../../store/useCellStore.js'
 import CellToolbar from './CellToolbar.jsx'
 import ResultsTable from './ResultsTable.jsx'
+import useZoomStore from "../../store/useZoomStore.js";
 
 // Mock results for UI testing — replaced by real WS response in feat/cell-core-ws
 const MOCK_RESULTS = {
@@ -25,6 +26,7 @@ function SqlCell({ cell }) {
     const { updateQuery, updateNamespace, setRunning, setResults, deleteCell } = useCellStore()
     const editorRef  = useRef(null)
     const viewRef    = useRef(null)
+    const { level } = useZoomStore()
 
     // Build CodeMirror editor once on mount
     useEffect(() => {
@@ -39,11 +41,13 @@ function SqlCell({ cell }) {
                     theme === 'dark' ? oneDark : [],
                     EditorView.theme({
                         '&': {
-                            fontSize: '13px',
+                            fontSize: `${level * 13}px`,  // ← apply zoom here directly
                             minHeight: '80px',
                         },
                         '.cm-editor': { borderRadius: '0' },
-                        '.cm-scroller': { fontFamily: 'JetBrains Mono, Fira Code, Menlo, monospace' },
+                        '.cm-scroller': {
+                            fontFamily: 'JetBrains Mono, Fira Code, Menlo, monospace'
+                        },
                     }),
                     EditorView.updateListener.of(update => {
                         if (update.docChanged) {
@@ -65,7 +69,9 @@ function SqlCell({ cell }) {
         viewRef.current.dispatch({
             effects: [],
         })
-    }, [theme])
+        const editorEl = editorRef.current?.querySelector('.cm-editor')
+        if (editorEl) editorEl.style.fontSize = `${level * 13}px`
+    }, [level, theme])
 
     function handleRun() {
         if (!cell.namespace || !cell.query.trim()) return

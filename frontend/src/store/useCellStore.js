@@ -14,7 +14,7 @@ function makeCell(overrides = {}) {
     }
 }
 
-const useCellStore = create((set) => ({
+const useCellStore = create((set, get) => ({
     cells: [],
 
     addCell: () => set(state => ({
