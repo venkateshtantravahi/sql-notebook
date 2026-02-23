@@ -3,6 +3,7 @@ import Header from "./components/layout/Header.jsx";
 import Sidebar from "./components/layout/Sidebar.jsx";
 import MainArea from "./components/layout/MainArea.jsx";
 import BottomBar from "./components/layout/BottomBar.jsx";
+import ConfigModal from "./components/modal/ConfigModal.jsx";
 
 function App() {
     const { theme, toggleTheme } = useThemeStore()
@@ -12,6 +13,7 @@ function App() {
             <Sidebar />
             <MainArea />
             <BottomBar />
+            <ConfigModal />
         </div>
     )
 }

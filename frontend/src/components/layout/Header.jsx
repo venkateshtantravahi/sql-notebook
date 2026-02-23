@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import useThemeStore from "../../store/useThemeStore.js";
+import useConfigModalStore from "../../store/useConfigModalStore.js";
 
 
 // ── dropdown menu ────────────────────────────────────────────────────────────
@@ -104,6 +105,7 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
 function Header() {
     const { theme, toggleTheme } = useThemeStore()
     const [openMenu, setOpenMenu] = useState(null)
+    const { open } = useConfigModalStore()
 
     function toggle(label) {
         setOpenMenu(prev => prev === label ? null : label)
@@ -154,9 +156,7 @@ function Header() {
                 </button>
 
                 <button
-                    onClick={() => {
-                        // TODO: open connection config modal in feat/connection-manager
-                    }}
+                    onClick={open}
                     className="
             text-xs px-3 py-1.5 rounded transition-colors
             bg-blue-600 hover:bg-blue-500
