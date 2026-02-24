@@ -138,7 +138,7 @@ class QueryWebSocketTest {
         assertTrue(responses.stream().anyMatch(r -> "cell-B".equals(r.cellId()) && "done".equals(r.status())));
     }
 
-    // ── helper ────────────────────────────────────────────────────────────────
+    // helper
 
     private Session connectWebSocket(List<QueryResponse> collected,
                                      CountDownLatch latch,

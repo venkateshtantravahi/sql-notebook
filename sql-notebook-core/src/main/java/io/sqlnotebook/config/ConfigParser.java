@@ -57,7 +57,7 @@ public class ConfigParser {
      *
      * @throws ConfigException if the file exists but cannot be read.
      */
-    public Properties loadFile(String configFile) {
+    public static Properties loadFile(String configFile) {
         Properties props = new Properties();
         try (FileInputStream fis = new FileInputStream(configFile)) {
             props.load(fis);
@@ -140,7 +140,7 @@ public class ConfigParser {
      * Creates the file with a header comment if it does not exist yet.
      * Throws ConfigException if the namespace already exists in the file.
      */
-    public void write(String configFile, ConnectionConfig config) {
+    public static void write(String configFile, ConnectionConfig config) {
         Path path = Path.of(configFile);
 
         // Check for duplicate namespace

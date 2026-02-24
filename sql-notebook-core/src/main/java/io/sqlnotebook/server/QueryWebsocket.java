@@ -39,6 +39,7 @@ public class QueryWebsocket {
      */
     @OnMessage
     public void onMessage(String message, Session session) {
+//        if (message.contains("\"type\":\"ping\"")) return;
         QueryRequest request;
         try {
             // Deserialize the incoming JSON message into a QueryRequest object

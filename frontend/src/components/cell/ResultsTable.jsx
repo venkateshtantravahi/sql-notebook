@@ -73,30 +73,35 @@ function ResultsTable({ results, error, status }) {
                     </tr>
                     </thead>
                     <tbody>
-                    {results.rows.map((row, i) => (
+                    {results.rows.map((row, rowIndex) => (
                         <tr
-                            key={i}
+                            key={rowIndex}
                             className="
                   border-b border-gray-100 dark:border-gray-800
                   hover:bg-blue-50 dark:hover:bg-blue-900/10
                   transition-colors
                 "
                         >
-                            {results.columns.map(col => (
-                                <td
-                                    key={col}
-                                    className="
-                      px-3 py-1.5 font-mono
-                      text-gray-700 dark:text-gray-300
-                      whitespace-nowrap
-                    "
-                                >
-                                    {row[col] === null
-                                        ? <span className="text-gray-300 dark:text-gray-600 italic">null</span>
-                                        : String(row[col])
-                                    }
-                                </td>
-                            ))}
+                            {results.columns.map((col, colIndex) => {
+                                // Rows arrive from backend as arrays e.g. [1, "Alice", ...]
+                                // Access by position, not by column name
+                                const value = Array.isArray(row) ? row[colIndex] : row[col]
+                                return (
+                                    <td
+                                        key={col}
+                                        className="
+                                                px-3 py-1.5 font-mono
+                                                text-gray-700 dark:text-gray-300
+                                                whitespace-nowrap
+                                            "
+                                    >
+                                        {value === null || value === undefined
+                                            ? <span className="text-gray-300 dark:text-gray-600 italic">null</span>
+                                            : String(value)
+                                        }
+                                    </td>
+                                )
+                            })}
                         </tr>
                     ))}
                     </tbody>

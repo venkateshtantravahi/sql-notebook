@@ -161,7 +161,7 @@ class ConnectionRegistryTest {
                 () -> registry.register(mysqlConfig()));
     }
 
-    // ── helpers ──────────────────────────────────────────────────────────────
+    // helpers
 
     private ConnectionConfig mysqlConfig() {
         return new ConnectionConfig(

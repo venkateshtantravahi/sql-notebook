@@ -19,21 +19,31 @@ public class HttpServer {
      * Configures the server with routes and shared dependencies.
      *
      * @param port     The port to listen on.
-     * @param registry The registry to provide to the NamespaceHandler.
+     * @param registry The registry to provide to handlers.
      * @param executor The executor to provide to the QueryHandler and WebSocket.
      */
     public HttpServer(int port, ConnectionRegistry registry, QueryExecutor executor) {
         server = new Server(port);
+
         // Inject the executor into the WebSocket static context
         QueryWebsocket.setExecutor(executor);
 
         ServletContextHandler context = new ServletContextHandler();
         context.setContextPath("/");
-        // Register traditional HTTP Servlets
-        context.addServlet(new ServletHolder(new NamespaceHandler(registry)), "/namespaces");
-        context.addServlet(new ServletHolder(new QueryHandler(executor)), "/query");
-        context.addServlet(new ServletHolder(new SchemaHandler(registry)),  "/schema/*");
-        // Initialize Jakarta WebSocket support for Jetty
+
+        // REST endpoints
+        context.addServlet(new ServletHolder(new NamespaceHandler(registry)),             "/namespaces");
+        context.addServlet(new ServletHolder(new QueryHandler(executor)),                 "/query");
+        context.addServlet(new ServletHolder(new SchemaHandler(registry)),                "/schema/*");
+
+        // ConnectionHandler needs two mappings:
+        //   /connections   → handles POST /connections  (no trailing path)
+        //   /connections/* → handles POST /connections/test and DELETE /connections/:ns
+        ServletHolder connectionHolder = new ServletHolder(new ConnectionHandler(registry));
+        context.addServlet(connectionHolder, "/connections");
+        context.addServlet(connectionHolder, "/connections/*");
+
+        // Jakarta WebSocket
         JakartaWebSocketServletContainerInitializer.configure(context, (servletContext, wsContainer) -> {
             wsContainer.setDefaultMaxTextMessageBufferSize(65535);
             wsContainer.addEndpoint(QueryWebsocket.class);

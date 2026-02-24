@@ -197,7 +197,7 @@ class SchemaHandlerTest {
         assertEquals(400, resp.statusCode());
     }
 
-    // ── helpers ──────────────────────────────────────────────────────────────
+    // helpers
 
     private JsonNode findTable(JsonNode tables, String name) {
         for (JsonNode table : tables) {
