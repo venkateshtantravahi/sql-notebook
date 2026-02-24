@@ -1,25 +1,24 @@
 package io.sqlnotebook.config;
 
 /**
- * An immutable representation of a database connection configuration.
- * * @param namespace The unique identifier used to group these settings (e.g., "mysql", "postgres").
+ * Immutable representation of a single database connection configuration.
  *
- * @param type     The database engine type (must be one of the supported types in ConfigParser).
- * @param host     The network address of the database server.
- * @param port     The port number the database is listening on.
- * @param database The specific database or schema name to connect to.
- * @param user     The username for authentication.
- * @param password The password for authentication.
- * @param poolSize The maximum number of connections allowed in the connection pool.
+ * @param namespace The unique name identifying this connection (e.g. "prod_mysql").
+ * @param type      The database engine — mysql, postgresql, sqlite, oracle, microsoft-sql-server.
+ * @param host      Hostname or IP of the database server. Empty string for SQLite.
+ * @param port      Port number. 0 for SQLite.
+ * @param database  Database/schema name. File path for SQLite.
+ * @param username  Authentication username. Empty string for SQLite.
+ * @param password  Authentication password. Empty string for SQLite.
+ * @param poolSize  Maximum HikariCP pool size.
  */
 public record ConnectionConfig(
         String namespace,
         String type,
         String host,
-        int port,
+        int    port,
         String database,
-        String user,
+        String username,
         String password,
-        int poolSize
-) {
-}
+        int    poolSize
+) {}

@@ -3,12 +3,76 @@
  */
 package io.sqlnotebook;
 
+import io.sqlnotebook.config.ConfigParser;
+import io.sqlnotebook.config.ConnectionConfig;
+import io.sqlnotebook.connection.ConnectionRegistry;
+import io.sqlnotebook.executor.QueryExecutor;
+import io.sqlnotebook.server.HttpServer;
+
+import java.util.Map;
+
+/**
+ * Application entry point.
+ *
+ * Startup sequence:
+ * 1. Look for sql.properties in the working directory
+ * 2. Parse any existing namespace configurations
+ * 3. Initialise ConnectionRegistry with those configs (empty map is fine)
+ * 4. Start HttpServer on port 8080
+ * 5. Register shutdown hook to cleanly close all connection pools
+ *
+ * sql.properties is optional — the app starts with no connections and
+ * the user adds them via the ⚙ Config UI.
+ */
 public class App {
-    public String getGreeting() {
-        return "Hello World!";
+
+    private static final int    DEFAULT_PORT   = 8080;
+    private static final String CONFIG_FILE    = "sql.properties";
+
+    public static void main(String[] args) throws Exception {
+        int port = parsePort(args);
+
+        // Step 1 — parse sql.properties (returns empty map if file missing)
+        ConfigParser parser = new ConfigParser();
+        Map<String, ConnectionConfig> configs = parser.parse(CONFIG_FILE);
+
+        if (configs.isEmpty()) {
+            System.out.println("[sql-notebook] No sql.properties found — " +
+                    "starting with no connections. Use ⚙ Config to add one.");
+        } else {
+            System.out.println("[sql-notebook] Loaded " + configs.size() +
+                    " namespace(s): " + configs.keySet());
+        }
+
+        // Step 2 — initialise registry and executor
+        ConnectionRegistry registry = new ConnectionRegistry(configs);
+        QueryExecutor      executor = new QueryExecutor(registry);
+
+        // Step 3 — start HTTP server
+        HttpServer server = new HttpServer(port, registry, executor);
+        server.start();
+        System.out.println("[sql-notebook] Server started on http://localhost:" + port);
+
+        // Step 4 — shutdown hook
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("[sql-notebook] Shutting down...");
+            try { server.stop(); } catch (Exception e) { /* best effort */ }
+            registry.shutdown();
+            System.out.println("[sql-notebook] Shutdown complete.");
+        }));
+
+        server.join();
     }
 
-    public static void main(String[] args) {
-        System.out.println(new App().getGreeting());
+    private static int parsePort(String[] args) {
+        if (args.length > 0) {
+            try {
+                return Integer.parseInt(args[0]);
+            } catch (NumberFormatException e) {
+                System.err.println("[sql-notebook] Invalid port '" + args[0] +
+                        "' — using default " + DEFAULT_PORT);
+            }
+        }
+        return DEFAULT_PORT;
     }
 }

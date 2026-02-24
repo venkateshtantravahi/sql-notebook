@@ -34,8 +34,8 @@ class HttpServerTest {
     @BeforeEach
     void setUp() throws Exception {
         registry = new ConnectionRegistry(Map.of("pg", postgresConfig()));
-        executor = new QueryExecutor(registry, 4);
-        server = new HttpServer(PORT, registry, executor);
+        executor = new QueryExecutor(registry);
+        server   = new HttpServer(PORT, registry, executor);
         server.start();
         client = HttpClient.newHttpClient();
 
@@ -61,8 +61,7 @@ class HttpServerTest {
     void shouldReturnNamespaces() throws Exception {
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + PORT + "/namespaces"))
-                .GET()
-                .build();
+                .GET().build();
 
         HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
 
@@ -92,7 +91,7 @@ class HttpServerTest {
     @Test
     void shouldReturn400ForMissingFields() throws Exception {
         String body = """
-                        {"namespace":"pg"}
+                {"namespace":"pg"}
                 """;
 
         HttpRequest req = HttpRequest.newBuilder()
@@ -102,14 +101,13 @@ class HttpServerTest {
                 .build();
 
         HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
-
         assertEquals(400, res.statusCode());
     }
 
     @Test
     void shouldReturn404ForUnknownNamespace() throws Exception {
         String body = """
-                        {"namespace":"unknown", "sql":"SELECT 1"}
+                {"namespace":"unknown","sql":"SELECT 1"}
                 """;
 
         HttpRequest req = HttpRequest.newBuilder()
@@ -119,13 +117,16 @@ class HttpServerTest {
                 .build();
 
         HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
-
         assertEquals(404, res.statusCode());
     }
 
+    // ── helper ────────────────────────────────────────────────────────────────
+
     private ConnectionConfig postgresConfig() {
-        return new ConnectionConfig("pg", "postgres",
+        return new ConnectionConfig(
+                "pg", "postgresql",
                 postgres.getHost(), postgres.getMappedPort(5432),
-                postgres.getDatabaseName(), postgres.getUsername(), postgres.getPassword(), 4);
+                postgres.getDatabaseName(), postgres.getUsername(), postgres.getPassword(), 4
+        );
     }
 }

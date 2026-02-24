@@ -79,19 +79,19 @@ class SchemaHandlerTest {
                         mysql.getDatabaseName(), mysql.getUsername(), mysql.getPassword(), 5
                 ),
                 "pg_ns", new ConnectionConfig(
-                        "pg_ns", "postgres",
+                        "pg_ns", "postgresql",
                         postgres.getHost(), postgres.getMappedPort(5432),
                         postgres.getDatabaseName(), postgres.getUsername(), postgres.getPassword(), 5
                 )
         );
 
         ConnectionRegistry registry = new ConnectionRegistry(configs);
-        QueryExecutor executor = new QueryExecutor(registry, 5);
+        QueryExecutor executor = new QueryExecutor(registry);
         server = new HttpServer(0, registry, executor);
         server.start();
         port = server.getPort();
 
-        http = HttpClient.newHttpClient();
+        http   = HttpClient.newHttpClient();
         mapper = new ObjectMapper();
     }
 
@@ -118,12 +118,10 @@ class SchemaHandlerTest {
         assertTrue(tables.isArray());
         assertTrue(tables.size() >= 2);
 
-        // Find customers table
         JsonNode customers = findTable(tables, "customers");
         assertNotNull(customers, "customers table should exist");
 
-        // Verify primary key detection
-        JsonNode columns = customers.get("columns");
+        JsonNode columns    = customers.get("columns");
         JsonNode customerIdCol = findColumn(columns, "customerID");
         assertNotNull(customerIdCol);
         assertTrue(customerIdCol.get("primaryKey").asBoolean());
@@ -139,7 +137,7 @@ class SchemaHandlerTest {
                 HttpResponse.BodyHandlers.ofString()
         );
 
-        JsonNode root = mapper.readTree(resp.body());
+        JsonNode root   = mapper.readTree(resp.body());
         JsonNode tables = root.get("tables");
 
         JsonNode orders = findTable(tables, "orders");
@@ -165,7 +163,7 @@ class SchemaHandlerTest {
         JsonNode root = mapper.readTree(resp.body());
         assertEquals("pg_ns", root.get("namespace").asString());
 
-        JsonNode tables = root.get("tables");
+        JsonNode tables   = root.get("tables");
         JsonNode products = findTable(tables, "products");
         assertNotNull(products, "products table should exist");
 
@@ -185,7 +183,6 @@ class SchemaHandlerTest {
                         .GET().build(),
                 HttpResponse.BodyHandlers.ofString()
         );
-
         assertEquals(404, resp.statusCode());
     }
 
@@ -197,7 +194,6 @@ class SchemaHandlerTest {
                         .GET().build(),
                 HttpResponse.BodyHandlers.ofString()
         );
-
         assertEquals(400, resp.statusCode());
     }
 
@@ -205,18 +201,14 @@ class SchemaHandlerTest {
 
     private JsonNode findTable(JsonNode tables, String name) {
         for (JsonNode table : tables) {
-            if (table.get("name").asString().equalsIgnoreCase(name)) {
-                return table;
-            }
+            if (table.get("name").asString().equalsIgnoreCase(name)) return table;
         }
         return null;
     }
 
     private JsonNode findColumn(JsonNode columns, String name) {
         for (JsonNode col : columns) {
-            if (col.get("name").asString().equalsIgnoreCase(name)) {
-                return col;
-            }
+            if (col.get("name").asString().equalsIgnoreCase(name)) return col;
         }
         return null;
     }

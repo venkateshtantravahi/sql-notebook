@@ -27,7 +27,7 @@ class QueryExecutorTest {
     @BeforeEach
     void setUp() throws Exception {
         registry = new ConnectionRegistry(Map.of("pg", postgresConfig()));
-        executor = new QueryExecutor(registry, 4);
+        executor = new QueryExecutor(registry);
 
         try (var conn = registry.getConnection("pg");
              var stmt = conn.createStatement()) {
@@ -80,13 +80,13 @@ class QueryExecutorTest {
         Future<QueryResult> f1 = executor.execute("pg", "SELECT * FROM users WHERE id = 1");
         Future<QueryResult> f2 = executor.execute("pg", "SELECT * FROM users WHERE id = 2");
 
-        QueryResult result = f1.get();
-        QueryResult result2 = f2.get();
+        QueryResult r1 = f1.get();
+        QueryResult r2 = f2.get();
 
-        assertTrue(result.success());
-        assertTrue(result2.success());
-        assertEquals(1, result.rows().size());
-        assertEquals(1, result2.rows().size());
+        assertTrue(r1.success());
+        assertTrue(r2.success());
+        assertEquals(1, r1.rows().size());
+        assertEquals(1, r2.rows().size());
     }
 
     @Test
@@ -97,11 +97,13 @@ class QueryExecutorTest {
         assertTrue(result.executionTimeMs() >= 0);
     }
 
-    // helper
+    // ── helper ────────────────────────────────────────────────────────────────
 
     private ConnectionConfig postgresConfig() {
-        return new ConnectionConfig("pg", "postgres",
+        return new ConnectionConfig(
+                "pg", "postgresql",
                 postgres.getHost(), postgres.getMappedPort(5432),
-                postgres.getDatabaseName(), postgres.getUsername(), postgres.getPassword(), 4);
+                postgres.getDatabaseName(), postgres.getUsername(), postgres.getPassword(), 4
+        );
     }
 }

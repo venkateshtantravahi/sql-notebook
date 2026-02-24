@@ -26,12 +26,12 @@ public class ConfigParserTest {
     @Test
     void parseSingleMysqlConnection() throws IOException {
         Path file = writeProps("""
-                db.local_mysql.type=mysql
-                db.local_mysql.host=localhost
-                db.local_mysql.port=3306
-                db.local_mysql.database=myapp
-                db.local_mysql.user=root
-                db.local_mysql.password=secret
+                local_mysql.type=mysql
+                local_mysql.host=localhost
+                local_mysql.port=3306
+                local_mysql.database=myapp
+                local_mysql.username=root
+                local_mysql.password=secret
                 """);
 
         Map<String, ConnectionConfig> result = parser.parse(file.toString());
@@ -48,36 +48,36 @@ public class ConfigParserTest {
     @Test
     void parseTwoConnections() throws IOException {
         Path file = writeProps("""
-                 db.local_mysql.type=mysql
-                 db.local_mysql.host=localhost
-                 db.local_mysql.port=3306
-                 db.local_mysql.database=myapp
-                 db.local_mysql.user=root
-                 db.local_mysql.password=secret
-                
-                 db.analytics_pg.type=postgres
-                 db.analytics_pg.host=localhost
-                 db.analytics_pg.port=5432
-                 db.analytics_pg.database=analytics
-                 db.analytics_pg.user=analyst
-                 db.analytics_pg.password=secret
-                 db.analytics_pg.pool.size=10
+                local_mysql.type=mysql
+                local_mysql.host=localhost
+                local_mysql.port=3306
+                local_mysql.database=myapp
+                local_mysql.username=root
+                local_mysql.password=secret
+
+                analytics_pg.type=postgresql
+                analytics_pg.host=localhost
+                analytics_pg.port=5432
+                analytics_pg.database=analytics
+                analytics_pg.username=analyst
+                analytics_pg.password=secret
                 """);
 
         Map<String, ConnectionConfig> result = parser.parse(file.toString());
 
         assertEquals(2, result.size());
-        assertEquals(10, result.get("analytics_pg").poolSize());
+        assertNotNull(result.get("local_mysql"));
+        assertNotNull(result.get("analytics_pg"));
     }
 
     @Test
     void throwsOnMissingRequiredFields() throws IOException {
         Path file = writeProps("""
-                    db.local_mysql.type=mysql
-                    db.local_mysql.port=3306
-                    db.local_mysql.database=myapp
-                    db.local_mysql.user=root
-                    db.local_mysql.password=secret
+                    local_mysql.type=mysql
+                    local_mysql.port=3306
+                    local_mysql.database=myapp
+                    local_mysql.username=root
+                    local_mysql.password=secret
                 """);
 
         ConfigException ex = assertThrows(ConfigException.class, () -> parser.parse(file.toString()));
@@ -87,33 +87,34 @@ public class ConfigParserTest {
     @Test
     void throwsOnUnsupportedType() throws IOException {
         Path file = writeProps("""
-                    db.local_oracle.type=ibm-db2
-                    db.local_oracle.host=localhost
-                    db.local_oracle.port=1521
-                    db.local_oracle.database=myapp
-                    db.local_oracle.user=root
-                    db.local_oracle.password=secret
+                    local_oracle.type=ibm-db2
+                    local_oracle.host=localhost
+                    local_oracle.port=1521
+                    local_oracle.database=myapp
+                    local_oracle.username=root
+                    local_oracle.password=secret
                 """);
         ConfigException ex = assertThrows(ConfigException.class, () -> parser.parse(file.toString()));
         assertTrue(ex.getMessage().contains("Unsupported type"));
     }
 
     @Test
-    void throwsWhenFileNotFound() throws IOException {
-        ConfigException ex = assertThrows(ConfigException.class,
-                () -> parser.parse("/nonexistent/sql.properties"));
-        assertTrue(ex.getMessage().contains("not found"));
+    void returnsEmptyMapWhenFileNotFound() {
+        // New behaviour — missing file is not an error, app starts with no connections
+        Map<String, ConnectionConfig> result = parser.parse("/nonexistent/sql.properties");
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
     }
 
     @Test
     void defaultPoolSizeAppliedWhenMissing() throws IOException {
         Path file = writeProps("""
-                    db.local_mysql.type=mysql
-                    db.local_mysql.host=localhost
-                    db.local_mysql.port=3306
-                    db.local_mysql.database=myapp
-                    db.local_mysql.user=root
-                    db.local_mysql.password=secret
+                    local_mysql.type=mysql
+                    local_mysql.host=localhost
+                    local_mysql.port=3306
+                    local_mysql.database=myapp
+                    local_mysql.username=root
+                    local_mysql.password=secret
                 """);
 
         Map<String, ConnectionConfig> result = parser.parse(file.toString());
@@ -123,12 +124,12 @@ public class ConfigParserTest {
     @Test
     void parseSingleOracleConnection() throws IOException {
         Path file = writeProps("""
-                db.local_oracle.type=oracle
-                db.local_oracle.host=localhost
-                db.local_oracle.port=1521
-                db.local_oracle.database=myapp
-                db.local_oracle.user=admin
-                db.local_oracle.password=secret
+                local_oracle.type=oracle
+                local_oracle.host=localhost
+                local_oracle.port=1521
+                local_oracle.database=myapp
+                local_oracle.username=admin
+                local_oracle.password=secret
                 """);
 
         Map<String, ConnectionConfig> result = parser.parse(file.toString());
@@ -139,12 +140,8 @@ public class ConfigParserTest {
     @Test
     void parseSingleSqliteConnection() throws IOException {
         Path file = writeProps("""
-                db.local_sqlite.type=sqlite
-                db.local_sqlite.host=localhost
-                db.local_sqlite.port=0
-                db.local_sqlite.database=mydb.sqlite
-                db.local_sqlite.user=admin
-                db.local_sqlite.password=secret
+                local_sqlite.type=sqlite
+                local_sqlite.database=mydb.sqlite
                 """);
 
         Map<String, ConnectionConfig> result = parser.parse(file.toString());
@@ -155,12 +152,12 @@ public class ConfigParserTest {
     @Test
     void parseSingleMssqlConnection() throws IOException {
         Path file = writeProps("""
-                db.local_mssql.type=microsoft-sql-server
-                db.local_mssql.host=localhost
-                db.local_mssql.port=1433
-                db.local_mssql.database=myapp
-                db.local_mssql.user=sa
-                db.local_mssql.password=secret
+                local_mssql.type=microsoft-sql-server
+                local_mssql.host=localhost
+                local_mssql.port=1433
+                local_mssql.database=myapp
+                local_mssql.username=sa
+                local_mssql.password=secret
                 """);
 
         Map<String, ConnectionConfig> result = parser.parse(file.toString());

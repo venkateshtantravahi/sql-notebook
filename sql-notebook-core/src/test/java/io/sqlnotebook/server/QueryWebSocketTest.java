@@ -35,13 +35,12 @@ class QueryWebSocketTest {
     @BeforeEach
     void setUp() throws Exception {
         ConnectionConfig config = new ConnectionConfig(
-                "test", "postgres",
+                "test", "postgresql",
                 postgres.getHost(), postgres.getMappedPort(5432),
                 postgres.getDatabaseName(), postgres.getUsername(), postgres.getPassword(), 5
         );
-        registry = new ConnectionRegistry(Map.of("test", config));
-        executor = new QueryExecutor(registry, 5);
-
+        registry   = new ConnectionRegistry(Map.of("test", config));
+        executor   = new QueryExecutor(registry);
         httpServer = new HttpServer(0, registry, executor);
         httpServer.start();
     }
@@ -61,16 +60,14 @@ class QueryWebSocketTest {
         try (Session session = connectWebSocket(responses, latch, "done")) {
             QueryRequest request = new QueryRequest("cell-1", "test", "SELECT 1 AS val");
             session.getBasicRemote().sendText(mapper.writeValueAsString(request));
-
-            assertTrue(latch.await(10, TimeUnit.SECONDS), "Did not receive a response within timeout");
-
+            assertTrue(latch.await(10, TimeUnit.SECONDS), "Did not receive response within timeout");
         }
 
-        assertEquals(2, responses.size(), "Expected exactly 2 messages: running + done");
+        assertEquals(2, responses.size());
         assertEquals("running", responses.get(0).status());
-        assertEquals("cell-1", responses.get(0).cellId());
-        assertEquals("done", responses.get(1).status());
-        assertEquals("cell-1", responses.get(1).cellId());
+        assertEquals("cell-1",  responses.get(0).cellId());
+        assertEquals("done",    responses.get(1).status());
+        assertEquals("cell-1",  responses.get(1).cellId());
         assertNotNull(responses.get(1).result());
         assertTrue(responses.get(1).result().success());
     }
@@ -83,14 +80,12 @@ class QueryWebSocketTest {
         try (Session session = connectWebSocket(responses, latch, "done")) {
             QueryRequest request = new QueryRequest("cell-2", "test", "SELECT * FROM nonexistent_table_xyz");
             session.getBasicRemote().sendText(mapper.writeValueAsString(request));
-
             assertTrue(latch.await(10, TimeUnit.SECONDS));
         }
 
         assertEquals(2, responses.size());
         assertEquals("running", responses.get(0).status());
-        // Invalid SQL returns done with success=false (QueryExecutor handles errors gracefully)
-        assertEquals("done", responses.get(1).status());
+        assertEquals("done",    responses.get(1).status());
         assertFalse(responses.get(1).result().success());
         assertNotNull(responses.get(1).result().errorMessage());
     }
@@ -98,62 +93,53 @@ class QueryWebSocketTest {
     @Test
     void shouldReturnErrorForUnknownNamespace() throws Exception {
         List<QueryResponse> responses = new ArrayList<>();
-        CountDownLatch doneLatch = new CountDownLatch(1);
+        CountDownLatch latch = new CountDownLatch(1);
 
-        try (Session session = connectWebSocket(responses, doneLatch, "error")) {
+        try (Session session = connectWebSocket(responses, latch, "error")) {
             QueryRequest request = new QueryRequest("cell-3", "unknown_ns", "SELECT 1");
             session.getBasicRemote().sendText(mapper.writeValueAsString(request));
-
-            assertTrue(doneLatch.await(10, TimeUnit.SECONDS));
+            assertTrue(latch.await(10, TimeUnit.SECONDS));
         }
 
-        // running + error (unknown namespace throws before query can run)
         assertTrue(responses.stream().anyMatch(r -> "error".equals(r.status())));
     }
 
     @Test
     void shouldHandleMissingFieldsWithError() throws Exception {
         List<QueryResponse> responses = new ArrayList<>();
-        CountDownLatch doneLatch = new CountDownLatch(1);
+        CountDownLatch latch = new CountDownLatch(1);
 
-        try (Session session = connectWebSocket(responses, doneLatch, "error")) {
-            // Send message missing 'sql' field
+        try (Session session = connectWebSocket(responses, latch, "error")) {
             session.getBasicRemote().sendText("{\"cellId\":\"cell-4\",\"namespace\":\"test\"}");
-
-            assertTrue(doneLatch.await(5, TimeUnit.SECONDS));
+            assertTrue(latch.await(5, TimeUnit.SECONDS));
         }
 
         assertEquals(1, responses.size());
-        assertEquals("error", responses.get(0).status());
+        assertEquals("error",  responses.get(0).status());
         assertEquals("cell-4", responses.get(0).cellId());
     }
 
     @Test
     void shouldHandleTwoParallelCellsOnSameConnection() throws Exception {
         List<QueryResponse> responses = new ArrayList<>();
-        CountDownLatch doneLatch = new CountDownLatch(2); // wait for 2 "done" messages
+        CountDownLatch latch = new CountDownLatch(2);
 
-        try (Session session = connectWebSocket(responses, doneLatch, "done")) {
+        try (Session session = connectWebSocket(responses, latch, "done")) {
             session.getBasicRemote().sendText(mapper.writeValueAsString(
                     new QueryRequest("cell-A", "test", "SELECT 1 AS a")));
             session.getBasicRemote().sendText(mapper.writeValueAsString(
                     new QueryRequest("cell-B", "test", "SELECT 2 AS b")));
-
-            assertTrue(doneLatch.await(15, TimeUnit.SECONDS), "Both cells did not complete in time");
+            assertTrue(latch.await(15, TimeUnit.SECONDS), "Both cells did not complete in time");
         }
 
         long doneCount = responses.stream().filter(r -> "done".equals(r.status())).count();
-        assertEquals(2, doneCount, "Expected 2 done responses, one per cell");
-
-        // Both cells should be represented
+        assertEquals(2, doneCount);
         assertTrue(responses.stream().anyMatch(r -> "cell-A".equals(r.cellId()) && "done".equals(r.status())));
         assertTrue(responses.stream().anyMatch(r -> "cell-B".equals(r.cellId()) && "done".equals(r.status())));
     }
 
-    // -------------------------------------------------------------------------
-    // Helper — connects a WebSocket client and collects messages
-    // terminatingStatus: the status value ("done" or "error") that triggers the latch
-    // -------------------------------------------------------------------------
+    // ── helper ────────────────────────────────────────────────────────────────
+
     private Session connectWebSocket(List<QueryResponse> collected,
                                      CountDownLatch latch,
                                      String terminatingStatus) throws Exception {
