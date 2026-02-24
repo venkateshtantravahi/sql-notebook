@@ -7,26 +7,16 @@ import useThemeStore from '../../store/useThemeStore.js'
 import useCellStore from '../../store/useCellStore.js'
 import CellToolbar from './CellToolbar.jsx'
 import ResultsTable from './ResultsTable.jsx'
-import useZoomStore from "../../store/useZoomStore.js";
-
-// Mock results for UI testing — replaced by real WS response in feat/cell-core-ws
-const MOCK_RESULTS = {
-    columns:  ['customerID', 'firstName', 'lastName', 'birthDate'],
-    rows: [
-        { customerID: 1, firstName: 'John',  lastName: 'Doe',   birthDate: '1990-01-01' },
-        { customerID: 2, firstName: 'Jane',  lastName: 'Smith', birthDate: '1985-06-15' },
-        { customerID: 3, firstName: 'Bob',   lastName: 'Jones', birthDate: '1978-03-22' },
-    ],
-    rowCount: 3,
-    duration: 42,
-}
+import useZoomStore from '../../store/useZoomStore.js'
+import { useQuerySocket } from '../../hooks/useQuerySocket.js'
 
 function SqlCell({ cell }) {
     const { theme } = useThemeStore()
-    const { updateQuery, updateNamespace, setRunning, setResults, deleteCell } = useCellStore()
-    const editorRef  = useRef(null)
-    const viewRef    = useRef(null)
+    const { updateQuery, updateNamespace, deleteCell } = useCellStore()
+    const editorRef = useRef(null)
+    const viewRef   = useRef(null)
     const { level } = useZoomStore()
+    const runQuery  = useQuerySocket()
 
     // Build CodeMirror editor once on mount
     useEffect(() => {
@@ -41,10 +31,10 @@ function SqlCell({ cell }) {
                     theme === 'dark' ? oneDark : [],
                     EditorView.theme({
                         '&': {
-                            fontSize: `${level * 13}px`,  // ← apply zoom here directly
+                            fontSize: `${level * 13}px`,
                             minHeight: '80px',
                         },
-                        '.cm-editor': { borderRadius: '0' },
+                        '.cm-editor':  { borderRadius: '0' },
                         '.cm-scroller': {
                             fontFamily: 'JetBrains Mono, Fira Code, Menlo, monospace'
                         },
@@ -63,33 +53,24 @@ function SqlCell({ cell }) {
         return () => view.destroy()
     }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Swap theme without remounting editor
+    // Sync zoom level without remounting editor
     useEffect(() => {
-        if (!viewRef.current) return
-        viewRef.current.dispatch({
-            effects: [],
-        })
         const editorEl = editorRef.current?.querySelector('.cm-editor')
         if (editorEl) editorEl.style.fontSize = `${level * 13}px`
     }, [level, theme])
 
     function handleRun() {
         if (!cell.namespace || !cell.query.trim()) return
-        setRunning(cell.id)
-        // TODO: fire WebSocket in feat/cell-core-ws
-        // For now show mock results after a short delay
-        setTimeout(() => {
-            setResults(cell.id, MOCK_RESULTS)
-        }, 800)
+        runQuery(cell.id, cell.namespace, cell.query.trim())
     }
 
     return (
         <div className="
-      rounded-lg border border-gray-200 dark:border-gray-700
-      bg-white dark:bg-gray-900
-      shadow-sm
-      overflow-hidden
-    ">
+            rounded-lg border border-gray-200 dark:border-gray-700
+            bg-white dark:bg-gray-900
+            shadow-sm
+            overflow-hidden
+        ">
             <CellToolbar
                 cell={cell}
                 onRun={handleRun}

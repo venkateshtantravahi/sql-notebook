@@ -8,7 +8,7 @@ import useCellStore         from '../../store/useCellStore.js'
 import KeyboardShortcutsModal from '../modal/KeyboardShortcutsModal.jsx'
 import AboutModal             from '../modal/AboutModal.jsx'
 
-// ── menu definitions ─────────────────────────────────────────────────────────
+// ----─ menu definitions --------------------------------------------------------------------------------
 
 function buildMenus(actions) {
     return {
@@ -39,7 +39,7 @@ function buildMenus(actions) {
     }
 }
 
-// ── dropdown component ───────────────────────────────────────────────────────
+// ── dropdown component --------------------------------------------------------------------------------
 
 function Dropdown({ label, items, open, onToggle, onClose }) {
     const ref = useRef(null)
@@ -106,7 +106,7 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
     )
 }
 
-// ── editable notebook title ──────────────────────────────────────────────────
+// ── editable notebook title --------------------------------------------------------------------------------
 
 function NotebookTitle({ onRename, editTriggerRef }) {
     const { title, isDirty, setTitle } = useNotebookStore()
@@ -181,7 +181,7 @@ function NotebookTitle({ onRename, editTriggerRef }) {
     )
 }
 
-// ── main header ──────────────────────────────────────────────────────────────
+// ── main header --------------------------------------------------------------------------------
 
 function Header() {
     const { theme, toggleTheme }   = useThemeStore()
@@ -196,7 +196,7 @@ function Header() {
     const [showShortcuts,  setShowShortcuts ] = useState(false)
     const [showAbout,      setShowAbout     ] = useState(false)
 
-    // ── global keyboard shortcuts ──────────────────────────────────────────────
+    // ── global keyboard shortcuts --------------------------------------------------------------------------------
     useEffect(() => {
         function handle(e) {
             const mod = e.metaKey || e.ctrlKey
@@ -214,7 +214,7 @@ function Header() {
         return () => document.removeEventListener('keydown', handle)
     }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-    // ── .sqlnb file format helpers ─────────────────────────────────────────────
+    // ── .sqlnb file format helpers --------------------------------------------------------------------------------
 
     async function writeSqlnbFile(fileHandle, data) {
         const writable = await fileHandle.createWritable()
@@ -231,7 +231,7 @@ function Header() {
         }
     }
 
-    // ── actions ────────────────────────────────────────────────────────────────
+    // ---- actions --------------------------------------------------------------------------------
 
     const fileHandleRef = useRef(null)
 
@@ -327,7 +327,7 @@ function Header() {
         }
     }
 
-    // ── menu definitions with wired actions ───────────────────────────────────
+    // ---- menu definitions with wired actions ----------------------------------------
 
     const MENUS = buildMenus({
         newNotebook:    handleNew,

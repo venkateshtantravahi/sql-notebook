@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import useConfigModalStore from '../../store/useConfigModalStore.js'
 
-// ── constants ────────────────────────────────────────────────────────────────
+// constants
 
 const DB_TYPES = [
-    { value: 'mysql',      label: 'MySQL',       defaultPort: 3306  },
-    { value: 'postgres',   label: 'PostgreSQL',  defaultPort: 5432  },
-    { value: 'sqlite',     label: 'SQLite',      defaultPort: null  },
-    { value: 'oracle',     label: 'Oracle',      defaultPort: 1521  },
-    { value: 'mssql',      label: 'SQL Server',  defaultPort: 1433  },
+    { value: 'mysql',                label: 'MySQL',       defaultPort: 3306, apiType: 'mysql'                },
+    { value: 'postgresql',           label: 'PostgreSQL',  defaultPort: 5432, apiType: 'postgresql'           },
+    { value: 'sqlite',               label: 'SQLite',      defaultPort: null, apiType: 'sqlite'               },
+    { value: 'oracle',               label: 'Oracle',      defaultPort: 1521, apiType: 'oracle'               },
+    { value: 'mssql',                label: 'SQL Server',  defaultPort: 1433, apiType: 'microsoft-sql-server' },
 ]
 
 const EMPTY_FORM = {
@@ -19,10 +19,9 @@ const EMPTY_FORM = {
     database:  '',
     username:  '',
     password:  '',
-    // poolSize:  '10',
 }
 
-// ── small input component ────────────────────────────────────────────────────
+// small input component
 
 function Field({ label, error, children }) {
     return (
@@ -57,7 +56,7 @@ function Input({ className = '', ...props }) {
     )
 }
 
-// ── validation ───────────────────────────────────────────────────────────────
+// validation
 
 function validate(form) {
     const errors = {}
@@ -79,19 +78,31 @@ function validate(form) {
     if (!form.database.trim())
         errors.database = form.type === 'sqlite' ? 'File path is required' : 'Database name is required'
 
-    // if (!form.poolSize || isNaN(form.poolSize) || +form.poolSize < 1 || +form.poolSize > 50)
-    //     errors.poolSize = 'Pool size must be between 1 and 50'
-
     return errors
 }
 
-// ── main component ───────────────────────────────────────────────────────────
+// build payload for backend
+
+function buildPayload(form) {
+    const dbType = DB_TYPES.find(d => d.value === form.type)
+    return {
+        namespace: form.namespace,
+        type:      dbType?.apiType ?? form.type,   // map UI value → backend type string
+        host:      form.host,
+        port:      form.port,
+        database:  form.database,
+        username:  form.username,
+        password:  form.password,
+    }
+}
+
+// main component
 
 function ConfigModal() {
     const { isOpen, close } = useConfigModalStore()
     const [form, setForm]     = useState(EMPTY_FORM)
     const [errors, setErrors] = useState({})
-    const [status, setStatus] = useState(null) // null | 'testing' | 'saving' | 'success' | 'error'
+    const [status, setStatus] = useState(null)     // null | 'testing' | 'connecting' | 'success' | 'error'
     const [statusMsg, setStatusMsg] = useState('')
     const overlayRef = useRef(null)
     const isSQLite   = form.type === 'sqlite'
@@ -109,19 +120,15 @@ function ConfigModal() {
     // Close on Escape
     useEffect(() => {
         if (!isOpen) return
-        function handle(e) {
-            if (e.key === 'Escape') close()
-        }
+        function handle(e) { if (e.key === 'Escape') close() }
         document.addEventListener('keydown', handle)
         return () => document.removeEventListener('keydown', handle)
     }, [isOpen, close])
 
-    // Close on overlay click
     function handleOverlayClick(e) {
         if (e.target === overlayRef.current) close()
     }
 
-    // Update field and auto-fill port when type changes
     function handleChange(field, value) {
         setForm(prev => {
             const next = { ...prev, [field]: value }
@@ -131,39 +138,78 @@ function ConfigModal() {
             }
             return next
         })
-        // Clear error for this field on change
         setErrors(prev => ({ ...prev, [field]: undefined }))
+        // Clear status when user edits the form
+        setStatus(null)
+        setStatusMsg('')
     }
 
-    function handleTestConnection() {
+    async function handleTestConnection() {
         const errs = validate(form)
-        if (Object.keys(errs).length > 0) {
-            setErrors(errs)
-            return
-        }
-        // TODO: POST /connections/test in feat/connection-manager
+        if (Object.keys(errs).length > 0) { setErrors(errs); return }
+
         setStatus('testing')
         setStatusMsg('')
-        setTimeout(() => {
-            setStatus('success')
-            setStatusMsg('Connection successful')
-        }, 1200)
+
+        try {
+            const res  = await fetch('/connections/test', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify(buildPayload(form)),
+            })
+            const data = await res.json()
+
+            if (res.ok && data.success) {
+                setStatus('success')
+                setStatusMsg('✓ ' + data.message)
+            } else {
+                setStatus('error')
+                setStatusMsg('✗ ' + (data.message || data.error || 'Connection failed'))
+            }
+        } catch {
+            setStatus('error')
+            setStatusMsg('✗ Could not reach backend')
+        }
     }
 
-    function handleConnect() {
+    async function handleConnect() {
         const errs = validate(form)
-        if (Object.keys(errs).length > 0) {
-            setErrors(errs)
-            return
-        }
-        // TODO: POST /connections in feat/connection-manager
-        setStatus('saving')
+        if (Object.keys(errs).length > 0) { setErrors(errs); return }
+
+        setStatus('connecting')
         setStatusMsg('')
-        setTimeout(() => {
-            setStatus('success')
-            setStatusMsg('Connection saved — restart backend to apply')
-            setTimeout(close, 1500)
-        }, 800)
+
+        try {
+            const res  = await fetch('/connections/add', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify(buildPayload(form)),
+            })
+            const data = await res.json()
+
+            if (res.status === 201) {
+                setStatus('success')
+                setStatusMsg('✓ ' + data.message)
+                // Small delay so the user sees the success message, then close
+                setTimeout(() => {
+                    close()
+                    // Dispatch a custom event so BottomBar, CellToolbar and
+                    // SchemaExplorer all re-fetch /namespaces immediately
+                    window.dispatchEvent(new CustomEvent('namespace-added', {
+                        detail: { namespace: data.namespace }
+                    }))
+                }, 800)
+            } else if (res.status === 409) {
+                setStatus('error')
+                setStatusMsg('✗ ' + data.error)
+            } else {
+                setStatus('error')
+                setStatusMsg('✗ ' + (data.error || 'Failed to add connection'))
+            }
+        } catch {
+            setStatus('error')
+            setStatusMsg('✗ Could not reach backend')
+        }
     }
 
     if (!isOpen) return null
@@ -216,7 +262,7 @@ function ConfigModal() {
                 {/* Form */}
                 <div className="px-5 py-4 flex flex-col gap-4">
 
-                    {/* Namespace + Type row */}
+                    {/* Namespace + Type */}
                     <div className="grid grid-cols-2 gap-3">
                         <Field label="Namespace name *" error={errors.namespace}>
                             <Input
@@ -305,16 +351,6 @@ function ConfigModal() {
                         </div>
                     )}
 
-                    {/*/!* Pool size *!/*/}
-                    {/*<Field label="Connection pool size" error={errors.poolSize}>*/}
-                    {/*    <Input*/}
-                    {/*        type="number"*/}
-                    {/*        placeholder="10"*/}
-                    {/*        value={form.poolSize}*/}
-                    {/*        onChange={e => handleChange('poolSize', e.target.value)}*/}
-                    {/*    />*/}
-                    {/*</Field>*/}
-
                     {/* Status message */}
                     {statusMsg && (
                         <div className={`
@@ -337,7 +373,7 @@ function ConfigModal() {
         ">
                     <button
                         onClick={handleTestConnection}
-                        disabled={status === 'testing' || status === 'saving'}
+                        disabled={status === 'testing' || status === 'connecting'}
                         className="
               text-xs px-4 py-2 rounded transition-colors
               border border-gray-200 dark:border-gray-700
@@ -363,7 +399,7 @@ function ConfigModal() {
                         </button>
                         <button
                             onClick={handleConnect}
-                            disabled={status === 'testing' || status === 'saving'}
+                            disabled={status === 'testing' || status === 'connecting'}
                             className="
                 text-xs px-4 py-2 rounded transition-colors
                 bg-blue-600 hover:bg-blue-500
@@ -371,7 +407,7 @@ function ConfigModal() {
                 disabled:opacity-50 disabled:cursor-not-allowed
               "
                         >
-                            {status === 'saving' ? 'Connecting...' : 'Connect'}
+                            {status === 'connecting' ? 'Connecting...' : 'Connect'}
                         </button>
                     </div>
                 </div>

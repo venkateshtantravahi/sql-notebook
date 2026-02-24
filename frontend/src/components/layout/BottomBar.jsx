@@ -1,21 +1,24 @@
 import { useState, useEffect } from 'react'
+import { useNamespaceRefresh } from '../../hooks/useNamespaceRefresh.js'
 
 function BottomBar() {
     const [namespaces, setNamespaces] = useState([])
 
-    useEffect(() => {
-        function fetchNs() {
-            fetch('/namespaces')
-                .then(r => r.ok ? r.json() : [])
-                .then(setNamespaces)
-                .catch(() => setNamespaces([]))
-        }
+    function fetchNs() {
+        fetch('/namespaces')
+            .then(r => r.ok ? r.json() : [])
+            .then(setNamespaces)
+            .catch(() => setNamespaces([]))
+    }
 
+    useEffect(() => {
         fetchNs()
         // Re-poll every 30 seconds so new connections appear without refresh
         const interval = setInterval(fetchNs, 30000)
         return () => clearInterval(interval)
     }, [])
+
+    useNamespaceRefresh(fetchNs)
 
     return (
         <footer className="

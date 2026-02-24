@@ -9,7 +9,6 @@
 plugins {
     // Apply the application plugin to add support for building a CLI application in Java.
     application
-//    id("com.autonomousapps.dependency-analysis") version "3.5.1"
 }
 
 repositories {
@@ -123,4 +122,35 @@ java {
 application {
     // Define the main class for the application.
     mainClass = "io.sqlnotebook.App"
+}
+
+// run task
+tasks.named<JavaExec>("run") {
+    description = "Start the sql-notebook backedn server"
+    group = "application"
+
+    workingDir = rootProject.projectDir
+
+    standardInput = System.`in`
+
+    doFirst {
+        println("\n sql-notebook starting on http://localhost:8080\n")
+    }
+}
+
+
+// dev only runk task
+tasks.register<JavaExec>("runDev") {
+    description = "Start backend only (skips frontend build - use during development)"
+    group = "application"
+
+    mainClass = "io.sqlnotebook.App"
+    classpath = sourceSets["main"].runtimeClasspath
+    workingDir = rootProject.projectDir
+    standardInput = System.`in`
+
+    doFirst {
+        println("\n sql-notebook [dev] starting on http://localhost:8080\n")
+        println("  Frontend not built - open frontend separately with: cd frontend && npm run dev")
+    }
 }

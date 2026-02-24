@@ -120,7 +120,7 @@ class HttpServerTest {
         assertEquals(404, res.statusCode());
     }
 
-    // ── helper ────────────────────────────────────────────────────────────────
+    // helper
 
     private ConnectionConfig postgresConfig() {
         return new ConnectionConfig(

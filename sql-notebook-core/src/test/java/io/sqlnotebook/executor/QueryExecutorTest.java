@@ -97,7 +97,7 @@ class QueryExecutorTest {
         assertTrue(result.executionTimeMs() >= 0);
     }
 
-    // ── helper ────────────────────────────────────────────────────────────────
+    // helper
 
     private ConnectionConfig postgresConfig() {
         return new ConnectionConfig(

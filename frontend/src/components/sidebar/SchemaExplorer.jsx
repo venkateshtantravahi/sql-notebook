@@ -1,6 +1,6 @@
 import useSchema from '../../hooks/useSchema.js'
 
-// ── column type badge ────────────────────────────────────────────────────────
+// ---- column type badge ---------------------------------------------------
 
 function TypeBadge({ type }) {
     const color =
@@ -23,7 +23,7 @@ function TypeBadge({ type }) {
     )
 }
 
-// ── single column row ────────────────────────────────────────────────────────
+// ---- single column row ---------------------------------------------------
 
 function ColumnRow({ column }) {
     const icon = column.primaryKey ? '🔑' : column.foreignKey ? '🔗' : null
@@ -55,7 +55,7 @@ function ColumnRow({ column }) {
     )
 }
 
-// ── single table block ───────────────────────────────────────────────────────
+// ---- single table block ---------------------------------------------------
 
 function TableBlock({ table }) {
     return (
@@ -93,7 +93,7 @@ function TableBlock({ table }) {
     )
 }
 
-// ── single namespace block ───────────────────────────────────────────────────
+// ---- single namespace block ---------------------------------------------------
 
 function NamespaceBlock({ ns }) {
     return (
@@ -126,7 +126,7 @@ function NamespaceBlock({ ns }) {
     )
 }
 
-// ── main component ───────────────────────────────────────────────────────────
+// ---- main component ---------------------------------------------------
 
 function SchemaExplorer() {
     const { schema, loading, error } = useSchema()
