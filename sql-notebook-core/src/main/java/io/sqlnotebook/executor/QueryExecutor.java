@@ -11,8 +11,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /**
- * Handles the asynchronous execution of SQL queries against registered databases.
- * It uses a fixed thread pool to manage concurrent execution and prevent thread exhaustion.
+ * Handles asynchronous execution of SQL queries against registered databases.
+ *
+ * Thread pool size is calculated automatically from the number of registered
+ * namespaces — no user configuration required. Formula: max(4, namespaceCount * 3)
+ * This gives at least 4 threads with room for 3 concurrent queries per namespace.
  */
 public class QueryExecutor {
 
@@ -20,60 +23,68 @@ public class QueryExecutor {
     private final ExecutorService threadPool;
 
     /**
-     * Initializes the executor with a shared registry and a dedicated thread pool.
+     * Creates an executor with a smart thread pool sized to the registry.
      *
-     * @param registry       The source of database connections.
-     * @param threadPoolSize The maximum number of concurrent queries allowed.
+     * @param registry The source of database connections.
      */
-    public QueryExecutor(ConnectionRegistry registry, int threadPoolSize) {
-        this.registry = registry;
-        this.threadPool = Executors.newFixedThreadPool(threadPoolSize);
+    public QueryExecutor(ConnectionRegistry registry) {
+        this.registry   = registry;
+        this.threadPool = Executors.newFixedThreadPool(calculatePoolSize(registry));
     }
 
     /**
      * Submits a SQL query for asynchronous execution.
      *
-     * @param namespace The database connection to use.
+     * @param namespace The database namespace to run the query against.
      * @param sql       The SQL string to execute.
-     * @return A {@link Future} that will eventually contain the {@link QueryResult}.
-     * @throws ConnectionRegistryException if the namespace is invalid.
+     * @return A {@link Future} containing the {@link QueryResult} when complete.
+     * @throws ConnectionRegistryException if the namespace is not registered.
      */
-    public Future<QueryResult> execute(String namespace, String sql) throws ConnectionRegistryException {
+    public Future<QueryResult> execute(String namespace, String sql) {
         registry.validateNamespace(namespace);
         return threadPool.submit(() -> runQuery(namespace, sql));
     }
 
     /**
-     * Initiates an orderly shutdown of the execution thread pool.
+     * Initiates an orderly shutdown of the thread pool.
+     * In-flight queries will complete before the pool terminates.
      */
     public void shutdown() {
         threadPool.shutdown();
     }
 
+    // ── private helpers ───────────────────────────────────────────────────────
+
     /**
-     * Internal logic for executing a query and capturing its results or errors.
-     * Implements try-with-resources to ensure JDBC objects are closed automatically.
+     * Calculates thread pool size from namespace count.
+     * min ensures we always have at least 4 threads even with 0 or 1 namespaces.
+     */
+    private static int calculatePoolSize(ConnectionRegistry registry) {
+        int namespaceCount = registry.getNamespaces().size();
+        return Math.max(4, namespaceCount * 3);
+    }
+
+    /**
+     * Executes the query and captures results or errors into a QueryResult.
+     * All JDBC resources are closed automatically via try-with-resources.
      */
     private QueryResult runQuery(String namespace, String sql) {
         long start = System.currentTimeMillis();
         try (Connection conn = registry.getConnection(namespace);
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+             Statement  stmt = conn.createStatement();
+             ResultSet  rs   = stmt.executeQuery(sql)) {
 
-            List<String> columns = extractColumns(rs);
-            List<List<Object>> rows = extractRows(rs);
+            List<String>       columns = extractColumns(rs);
+            List<List<Object>> rows    = extractRows(rs);
             long elapsed = System.currentTimeMillis() - start;
             return QueryResult.success(namespace, sql, columns, rows, elapsed);
-        } catch (Exception e) {
 
+        } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - start;
             return QueryResult.failure(namespace, sql, elapsed, e.getMessage());
         }
     }
 
-    /**
-     * Uses ResultSet metadata to determine the column headers.
-     */
     private List<String> extractColumns(ResultSet rs) throws SQLException {
         ResultSetMetaData meta = rs.getMetaData();
         List<String> columns = new ArrayList<>();
@@ -83,9 +94,6 @@ public class QueryExecutor {
         return columns;
     }
 
-    /**
-     * Iterates through the ResultSet to transform SQL rows into a List of Lists.
-     */
     private List<List<Object>> extractRows(ResultSet rs) throws SQLException {
         List<List<Object>> rows = new ArrayList<>();
         ResultSetMetaData meta = rs.getMetaData();

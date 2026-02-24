@@ -49,9 +49,7 @@ class ConnectionRegistryTest {
 
     @Test
     void shouldConnectToMysqlNamespace() throws Exception {
-        registry = new ConnectionRegistry(Map.of(
-                "local_mysql", mysqlConfig()
-        ));
+        registry = new ConnectionRegistry(Map.of("local_mysql", mysqlConfig()));
 
         try (Connection conn = registry.getConnection("local_mysql");
              Statement stmt = conn.createStatement();
@@ -62,9 +60,7 @@ class ConnectionRegistryTest {
 
     @Test
     void shouldConnectToPostgresNamespace() throws Exception {
-        registry = new ConnectionRegistry(Map.of(
-                "local_pg", postgresConfig()
-        ));
+        registry = new ConnectionRegistry(Map.of("local_pg", postgresConfig()));
 
         try (Connection conn = registry.getConnection("local_pg");
              Statement stmt = conn.createStatement();
@@ -108,7 +104,7 @@ class ConnectionRegistryTest {
     void shouldConnectToBothNamespacesIndependently() throws Exception {
         registry = new ConnectionRegistry(Map.of(
                 "local_mysql", mysqlConfig(),
-                "local_pg", postgresConfig()
+                "local_pg",    postgresConfig()
         ));
 
         assertEquals(2, registry.getNamespaces().size());
@@ -118,9 +114,7 @@ class ConnectionRegistryTest {
 
     @Test
     void shouldThrowForUnknownNamespace() {
-        registry = new ConnectionRegistry(Map.of(
-                "local_mysql", mysqlConfig()
-        ));
+        registry = new ConnectionRegistry(Map.of("local_mysql", mysqlConfig()));
 
         ConnectionRegistryException ex = assertThrows(
                 ConnectionRegistryException.class,
@@ -131,47 +125,77 @@ class ConnectionRegistryTest {
 
     @Test
     void shouldShutdownCleanly() {
-        registry = new ConnectionRegistry(Map.of(
-                "local_mysql", mysqlConfig()
-        ));
+        registry = new ConnectionRegistry(Map.of("local_mysql", mysqlConfig()));
         assertDoesNotThrow(() -> registry.shutdown());
         assertEquals(0, registry.getNamespaces().size());
     }
 
-    // --- helpers ---
+    @Test
+    void shouldRegisterNewNamespaceAtRuntime() throws Exception {
+        registry = new ConnectionRegistry(Map.of("local_mysql", mysqlConfig()));
+        assertEquals(1, registry.getNamespaces().size());
+
+        registry.register(postgresConfig());
+        assertEquals(2, registry.getNamespaces().size());
+        assertTrue(registry.getNamespaces().contains("local_pg"));
+    }
+
+    @Test
+    void shouldDeregisterNamespace() throws Exception {
+        registry = new ConnectionRegistry(Map.of(
+                "local_mysql", mysqlConfig(),
+                "local_pg",    postgresConfig()
+        ));
+        assertEquals(2, registry.getNamespaces().size());
+
+        registry.deregister("local_mysql");
+        assertEquals(1, registry.getNamespaces().size());
+        assertFalse(registry.getNamespaces().contains("local_mysql"));
+    }
+
+    @Test
+    void shouldThrowWhenRegisteringDuplicateNamespace() {
+        registry = new ConnectionRegistry(Map.of("local_mysql", mysqlConfig()));
+
+        assertThrows(ConnectionRegistryException.class,
+                () -> registry.register(mysqlConfig()));
+    }
+
+    // ── helpers ──────────────────────────────────────────────────────────────
 
     private ConnectionConfig mysqlConfig() {
         return new ConnectionConfig(
                 "local_mysql", "mysql",
                 mysql.getHost(), mysql.getMappedPort(3306),
-                mysql.getDatabaseName(), mysql.getUsername(), mysql.getPassword(),
-                2
+                mysql.getDatabaseName(), mysql.getUsername(), mysql.getPassword(), 2
         );
     }
 
     private ConnectionConfig postgresConfig() {
         return new ConnectionConfig(
-                "local_pg", "postgres",
+                "local_pg", "postgresql",
                 postgres.getHost(), postgres.getMappedPort(5432),
-                postgres.getDatabaseName(), postgres.getUsername(), postgres.getPassword(),
-                2
+                postgres.getDatabaseName(), postgres.getUsername(), postgres.getPassword(), 2
         );
     }
 
     private ConnectionConfig mssqlConfig() {
-        return new ConnectionConfig("local_mssql", "microsoft-sql-server",
+        return new ConnectionConfig(
+                "local_mssql", "microsoft-sql-server",
                 mssql.getHost(), mssql.getMappedPort(1433),
-                "master", mssql.getUsername(), mssql.getPassword(), 2);
+                "master", mssql.getUsername(), mssql.getPassword(), 2
+        );
     }
 
     private ConnectionConfig oracleConfig() {
-        return new ConnectionConfig("local_oracle", "oracle",
+        return new ConnectionConfig(
+                "local_oracle", "oracle",
                 oracle.getHost(), oracle.getMappedPort(1521),
-                oracle.getDatabaseName(), oracle.getUsername(), oracle.getPassword(), 2);
+                oracle.getDatabaseName(), oracle.getUsername(), oracle.getPassword(), 2
+        );
     }
 
     private ConnectionConfig sqliteConfig(String dbPath) {
-        return new ConnectionConfig("local_sqlite", "sqlite",
-                "", 0, dbPath, "", "", 2);
+        return new ConnectionConfig("local_sqlite", "sqlite", "", 0, dbPath, "", "", 2);
     }
 }

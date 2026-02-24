@@ -6,25 +6,24 @@ import io.sqlnotebook.config.ConnectionConfig;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Manages a collection of HikariCP connection pools indexed by their namespace.
- * This registry is responsible for initializing pools, providing active connections,
- * and ensuring proper resource cleanup during shutdown.
+ * Manages HikariCP connection pools indexed by namespace.
+ * Thread-safe — supports hot-loading new connections at runtime
+ * via register() without requiring an application restart.
  */
 public class ConnectionRegistry {
-    /**
-     * Internal storage for active data sources, keyed by their unique namespace.
-     */
-    private final Map<String, HikariDataSource> pools = new HashMap<>();
+
+    private final ConcurrentHashMap<String, HikariDataSource> pools = new ConcurrentHashMap<>();
 
     /**
-     * Initializes the registry by creating a connection pool for every provided configuration.
-     *
-     * @param configs A map of namespace-to-configuration objects.
+     * Initialises the registry from a map of configs.
+     * Typically called at startup with configs parsed from sql.properties.
+     * Accepts an empty map — app starts fine with no connections.
      */
     public ConnectionRegistry(Map<String, ConnectionConfig> configs) {
         for (ConnectionConfig config : configs.values()) {
@@ -33,11 +32,38 @@ public class ConnectionRegistry {
     }
 
     /**
-     * Retrieves an active JDBC connection from the specified pool.
+     * Hot-loads a new connection pool for the given config at runtime.
+     * Called by ConnectionHandler after writing the config to sql.properties.
      *
-     * @param namespace The identifier for the desired database connection.
-     * @return A live {@link Connection} object.
-     * @throws ConnectionRegistryException if the namespace is unknown or the pool fails to provide a connection.
+     * @throws ConnectionRegistryException if namespace already exists.
+     */
+    public void register(ConnectionConfig config) {
+        if (pools.containsKey(config.namespace())) {
+            throw new ConnectionRegistryException(
+                    "Namespace already registered: " + config.namespace()
+            );
+        }
+        pools.put(config.namespace(), buildPool(config));
+    }
+
+    /**
+     * Closes and removes the pool for the given namespace.
+     * Called by ConnectionHandler after removing from sql.properties.
+     *
+     * @throws ConnectionRegistryException if namespace is not found.
+     */
+    public void deregister(String namespace) {
+        HikariDataSource pool = pools.remove(namespace);
+        if (pool == null) {
+            throw new ConnectionRegistryException("Unknown namespace: " + namespace);
+        }
+        pool.close();
+    }
+
+    /**
+     * Returns a live JDBC connection from the named pool.
+     *
+     * @throws ConnectionRegistryException if namespace unknown or pool fails.
      */
     public Connection getConnection(String namespace) {
         HikariDataSource pool = pools.get(namespace);
@@ -47,30 +73,31 @@ public class ConnectionRegistry {
         try {
             return pool.getConnection();
         } catch (SQLException e) {
-            throw new ConnectionRegistryException("Failed to get connection for namespace: " + namespace, e);
+            throw new ConnectionRegistryException(
+                    "Failed to get connection for namespace: " + namespace, e
+            );
         }
     }
 
     /**
-     * @return A set of all registered namespaces currently managed by this registry.
+     * Returns a sorted snapshot of registered namespace names.
+     * Returns a copy — safe for concurrent modification.
      */
     public Set<String> getNamespaces() {
-        return pools.keySet();
+        return new TreeSet<>(pools.keySet());
     }
 
     /**
-     * Gracefully closes all managed connection pools and clears the registry.
-     * This should be called during application shutdown to prevent resource leaks.
+     * Returns true if the namespace is currently registered.
      */
-    public void shutdown() {
-        pools.values().forEach(HikariDataSource::close);
-        pools.clear();
+    public boolean hasNamespace(String namespace) {
+        return pools.containsKey(namespace);
     }
 
     /**
-     * Validates that a specific namespace exists within the registry.
+     * Validates that a namespace exists.
      *
-     * @throws ConnectionRegistryException if the namespace is not found.
+     * @throws ConnectionRegistryException if not found.
      */
     public void validateNamespace(String namespace) {
         if (!pools.containsKey(namespace)) {
@@ -79,38 +106,49 @@ public class ConnectionRegistry {
     }
 
     /**
-     * Maps our generic ConnectionConfig fields to HikariCP-specific settings.
+     * Closes all pools and clears the registry.
+     * Call during application shutdown.
      */
-    private HikariConfig buildHikariConfig(ConnectionConfig config) {
-        HikariConfig hikari = new HikariConfig();
-        hikari.setJdbcUrl(buildJdbcUrl(config));
-        hikari.setUsername(config.user());
-        hikari.setPassword(config.password());
-        hikari.setMaximumPoolSize(config.poolSize());
-        hikari.setPoolName("pool-" + config.namespace());
-        return hikari;
+    public void shutdown() {
+        pools.values().forEach(HikariDataSource::close);
+        pools.clear();
     }
 
-    /**
-     * Instantiates a new HikariDataSource based on the provided configuration.
-     */
+    // ── private helpers ───────────────────────────────────────────────────────
+
     private HikariDataSource buildPool(ConnectionConfig config) {
         return new HikariDataSource(buildHikariConfig(config));
     }
 
-    /**
-     * Generates the database-specific JDBC connection string.
-     * Uses a switch expression to handle various syntax requirements for different engines.
-     */
+    private HikariConfig buildHikariConfig(ConnectionConfig config) {
+        HikariConfig hikari = new HikariConfig();
+        hikari.setJdbcUrl(buildJdbcUrl(config));
+        hikari.setPoolName("pool-" + config.namespace());
+        hikari.setMaximumPoolSize(config.poolSize());
+
+        // SQLite uses file-based auth — no username/password
+        if (!config.type().equals("sqlite")) {
+            hikari.setUsername(config.username());
+            hikari.setPassword(config.password());
+        }
+        return hikari;
+    }
+
     private String buildJdbcUrl(ConnectionConfig config) {
         return switch (config.type()) {
-            case "mysql" -> "jdbc:mysql://%s:%d/%s".formatted(config.host(), config.port(), config.database());
-            case "postgres" -> "jdbc:postgresql://%s:%d/%s".formatted(config.host(), config.port(), config.database());
-            case "oracle" -> "jdbc:oracle:thin:@//%s:%d/%s".formatted(config.host(), config.port(), config.database());
-            case "sqlite" -> "jdbc:sqlite:%s".formatted(config.database());
+            case "mysql" ->
+                    "jdbc:mysql://%s:%d/%s".formatted(config.host(), config.port(), config.database());
+            case "postgresql" ->
+                    "jdbc:postgresql://%s:%d/%s".formatted(config.host(), config.port(), config.database());
+            case "oracle" ->
+                    "jdbc:oracle:thin:@//%s:%d/%s".formatted(config.host(), config.port(), config.database());
+            case "sqlite" ->
+                    "jdbc:sqlite:%s".formatted(config.database());
             case "microsoft-sql-server" ->
-                    "jdbc:sqlserver://%s:%d;databaseName=%s;trustServerCertificate=true".formatted(config.host(), config.port(), config.database());
-            default -> throw new ConnectionRegistryException("Unsupported type: " + config.type());
+                    "jdbc:sqlserver://%s:%d;databaseName=%s;trustServerCertificate=true"
+                            .formatted(config.host(), config.port(), config.database());
+            default ->
+                    throw new ConnectionRegistryException("Unsupported database type: " + config.type());
         };
     }
 }
