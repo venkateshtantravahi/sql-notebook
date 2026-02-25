@@ -1,22 +1,21 @@
 import useCellStore   from '../../store/useCellStore.js'
 import useSidebarStore from '../../store/useSidebarStore.js'
-import useZoomStore   from '../../store/useZoomStore.js'
-import SqlCell        from '../cell/SqlCell.jsx'
+import SqlCell         from '../cell/SqlCell.jsx'
 
 function MainArea() {
     const { cells, addCell }  = useCellStore()
     const { isOpen: sidebar } = useSidebarStore()
-    const { level }           = useZoomStore()
 
     return (
         <main
-            style={{ fontSize: `${level}em` }}
-            className={`
-        absolute top-12 bottom-10 right-0 overflow-y-auto
-        bg-gray-50 dark:bg-gray-950
-        transition-all duration-200
-        ${sidebar ? 'left-64' : 'left-0'}
-      `}
+            // Zoom is handled by useZoomStore writing to document.documentElement font-size
+            // Sidebar offset uses a CSS variable set by Sidebar.jsx on resize
+            style={{ left: sidebar ? 'var(--sidebar-width, 288px)' : 0 }}
+            className="
+                absolute top-12 bottom-10 right-0 overflow-y-auto
+                bg-gray-50 dark:bg-gray-950
+                transition-[left] duration-200
+            "
         >
             {cells.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full gap-3">
@@ -32,10 +31,10 @@ function MainArea() {
                     <button
                         onClick={addCell}
                         className="
-              mt-2 text-xs px-4 py-2 rounded
-              bg-blue-600 hover:bg-blue-500
-              text-white font-medium transition-colors
-            "
+                            mt-2 text-xs px-4 py-2 rounded
+                            bg-blue-600 hover:bg-blue-500
+                            text-white font-medium transition-colors
+                        "
                     >
                         + Add your first cell
                     </button>
@@ -48,13 +47,13 @@ function MainArea() {
                     <button
                         onClick={addCell}
                         className="
-              w-full py-2 rounded-lg
-              border border-dashed border-gray-300 dark:border-gray-700
-              text-xs text-gray-400 dark:text-gray-600
-              hover:border-blue-400 dark:hover:border-blue-600
-              hover:text-blue-500 dark:hover:text-blue-400
-              transition-colors
-            "
+                            w-full py-2 rounded-lg
+                            border border-dashed border-gray-300 dark:border-gray-700
+                            text-xs text-gray-400 dark:text-gray-600
+                            hover:border-blue-400 dark:hover:border-blue-600
+                            hover:text-blue-500 dark:hover:text-blue-400
+                            transition-colors
+                        "
                     >
                         + Add cell
                     </button>

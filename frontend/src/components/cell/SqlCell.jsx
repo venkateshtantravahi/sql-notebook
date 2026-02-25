@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { EditorView, basicSetup } from 'codemirror'
 import { sql } from '@codemirror/lang-sql'
 import { oneDark } from '@codemirror/theme-one-dark'
-import { EditorState } from '@codemirror/state'
+import { EditorState, Compartment } from '@codemirror/state'
 import useThemeStore from '../../store/useThemeStore.js'
 import useCellStore from '../../store/useCellStore.js'
 import CellToolbar from './CellToolbar.jsx'
@@ -10,15 +10,33 @@ import ResultsTable from './ResultsTable.jsx'
 import useZoomStore from '../../store/useZoomStore.js'
 import { useQuerySocket } from '../../hooks/useQuerySocket.js'
 
-function SqlCell({ cell }) {
-    const { theme } = useThemeStore()
-    const { updateQuery, updateNamespace, deleteCell } = useCellStore()
-    const editorRef = useRef(null)
-    const viewRef   = useRef(null)
-    const { level } = useZoomStore()
-    const runQuery  = useQuerySocket()
+// One Compartment per dynamic extension — lets us reconfigure them
+// independently without destroying and recreating the whole editor.
+const themeCompartment = new Compartment()
+const fontCompartment  = new Compartment()
 
-    // Build CodeMirror editor once on mount
+function buildThemeExt(isDark) {
+    return isDark ? oneDark : []
+}
+
+function buildFontExt(level) {
+    return EditorView.theme({
+        '&':            { fontSize: `${level * 13}px`, minHeight: '80px' },
+        '.cm-editor':   { borderRadius: '0' },
+        '.cm-scroller': { fontFamily: 'JetBrains Mono, Fira Code, Menlo, monospace' },
+    })
+}
+
+function SqlCell({ cell }) {
+    const { theme }  = useThemeStore()
+    const { level }  = useZoomStore()
+    const { updateQuery, updateNamespace, deleteCell } = useCellStore()
+    const editorRef  = useRef(null)
+    const viewRef    = useRef(null)
+    const runQuery   = useQuerySocket()
+
+    // Build editor ONCE — theme and font go through Compartments so they
+    // can be hot-swapped when the stores change without remounting.
     useEffect(() => {
         if (!editorRef.current) return
 
@@ -28,17 +46,8 @@ function SqlCell({ cell }) {
                 extensions: [
                     basicSetup,
                     sql(),
-                    theme === 'dark' ? oneDark : [],
-                    EditorView.theme({
-                        '&': {
-                            fontSize: `${level * 13}px`,
-                            minHeight: '80px',
-                        },
-                        '.cm-editor':  { borderRadius: '0' },
-                        '.cm-scroller': {
-                            fontFamily: 'JetBrains Mono, Fira Code, Menlo, monospace'
-                        },
-                    }),
+                    themeCompartment.of(buildThemeExt(theme === 'dark')),
+                    fontCompartment.of(buildFontExt(level)),
                     EditorView.updateListener.of(update => {
                         if (update.docChanged) {
                             updateQuery(cell.id, update.state.doc.toString())
@@ -53,11 +62,19 @@ function SqlCell({ cell }) {
         return () => view.destroy()
     }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Sync zoom level without remounting editor
+    // Hot-swap theme when store changes — no remount needed
     useEffect(() => {
-        const editorEl = editorRef.current?.querySelector('.cm-editor')
-        if (editorEl) editorEl.style.fontSize = `${level * 13}px`
-    }, [level, theme])
+        viewRef.current?.dispatch({
+            effects: themeCompartment.reconfigure(buildThemeExt(theme === 'dark'))
+        })
+    }, [theme])
+
+    // Hot-swap font size when zoom changes — no remount needed
+    useEffect(() => {
+        viewRef.current?.dispatch({
+            effects: fontCompartment.reconfigure(buildFontExt(level))
+        })
+    }, [level])
 
     function handleRun() {
         if (!cell.namespace || !cell.query.trim()) return
@@ -68,8 +85,7 @@ function SqlCell({ cell }) {
         <div className="
             rounded-lg border border-gray-200 dark:border-gray-700
             bg-white dark:bg-gray-900
-            shadow-sm
-            overflow-hidden
+            shadow-sm overflow-hidden
         ">
             <CellToolbar
                 cell={cell}
@@ -77,18 +93,8 @@ function SqlCell({ cell }) {
                 onDelete={() => deleteCell(cell.id)}
                 onNamespaceChange={ns => updateNamespace(cell.id, ns)}
             />
-
-            {/* CodeMirror editor mount point */}
-            <div
-                ref={editorRef}
-                className="border-b border-gray-200 dark:border-gray-700"
-            />
-
-            <ResultsTable
-                results={cell.results}
-                error={cell.error}
-                status={cell.status}
-            />
+            <div ref={editorRef} className="border-b border-gray-200 dark:border-gray-700" />
+            <ResultsTable results={cell.results} error={cell.error} status={cell.status} />
         </div>
     )
 }
