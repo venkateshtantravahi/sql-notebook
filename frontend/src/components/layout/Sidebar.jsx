@@ -20,11 +20,16 @@ function Sidebar() {
     function fetchNs() {
         fetch('/namespaces')
             .then(r => r.ok ? r.json() : [])
-            .then(list => {
+            .then(data => {
+                // Normalise both string[] (old) and health object[] (new) shapes
+                const list = Array.isArray(data) && data.length > 0 && typeof data[0] === 'string'
+                    ? data.map(name => ({ name, healthy: true, latencyMs: null }))
+                    : data
                 setNamespaces(list)
-                setSelectedNs(prev =>
-                    prev && list.includes(prev) ? prev : list[0] ?? null
-                )
+                setSelectedNs(prev => {
+                    const names = list.map(n => n.name)
+                    return prev && names.includes(prev) ? prev : list[0]?.name ?? null
+                })
             })
             .catch(() => setNamespaces([]))
     }
@@ -37,7 +42,7 @@ function Sidebar() {
 
     useNamespaceRefresh(fetchNs)
 
-    // drag-to-resize
+    //  drag-to-resize
     const onMouseDown = useCallback((e) => {
         dragging.current = true
         startX.current   = e.clientX
@@ -103,7 +108,7 @@ function Sidebar() {
                     flex flex-col overflow-hidden z-10
                 "
             >
-                {/* Connections  */}
+                {/*  Connections*/}
                 <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-800">
                     <div className="px-3 pt-3 pb-1 flex items-center justify-between">
                         <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
@@ -122,32 +127,32 @@ function Sidebar() {
                         ) : (
                             namespaces.map(ns => (
                                 <div
-                                    key={ns}
-                                    onClick={() => setSelectedNs(ns)}
+                                    key={ns.name}
+                                    onClick={() => setSelectedNs(ns.name)}
                                     className={`
                                         flex items-center gap-2 px-2 py-1.5 rounded-md mb-0.5
                                         cursor-pointer group transition-colors select-none
-                                        ${selectedNs === ns
+                                        ${selectedNs === ns.name
                                         ? 'bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800'
                                         : 'border border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'
                                     }
                                     `}
                                 >
-                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
+                                    <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ns.healthy === false ? 'bg-red-400 animate-pulse' : 'bg-emerald-400'}`} />
                                     <span className={`
                                         text-xs font-mono flex-1 truncate
-                                        ${selectedNs === ns
+                                        ${selectedNs === ns.name
                                         ? 'text-blue-700 dark:text-blue-300 font-semibold'
                                         : 'text-gray-700 dark:text-gray-300'
                                     }
                                     `}>
-                                        {ns}
+                                        {ns.name}
                                     </span>
                                     {/* Delete button — visible on hover */}
                                     <button
-                                        onClick={e => { e.stopPropagation(); handleDelete(ns) }}
-                                        disabled={deletingNs === ns}
-                                        title={`Disconnect ${ns}`}
+                                        onClick={e => { e.stopPropagation(); handleDelete(ns.name) }}
+                                        disabled={deletingNs === ns.name}
+                                        title={`Disconnect ${ns.name}`}
                                         className="
                                             opacity-0 group-hover:opacity-100 flex-shrink-0
                                             w-4 h-4 flex items-center justify-center rounded text-xs
@@ -157,7 +162,7 @@ function Sidebar() {
                                             transition-all disabled:opacity-30
                                         "
                                     >
-                                        {deletingNs === ns ? '…' : '✕'}
+                                        {deletingNs === ns.name ? '…' : '✕'}
                                     </button>
                                 </div>
                             ))
@@ -165,26 +170,26 @@ function Sidebar() {
                     </div>
                 </div>
 
-                {/*Schema Explorer */}
+                {/* Schema Explorer  */}
                 <div className="flex-1 flex flex-col overflow-hidden">
                     {/* Namespace switcher tabs — only shown when 2+ connections */}
                     {namespaces.length > 1 && (
                         <div className="flex-shrink-0 flex overflow-x-auto border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/50">
                             {namespaces.map(ns => (
                                 <button
-                                    key={ns}
-                                    onClick={() => setSelectedNs(ns)}
-                                    title={ns}
+                                    key={ns.name}
+                                    onClick={() => setSelectedNs(ns.name)}
+                                    title={ns.name}
                                     className={`
                                         flex-shrink-0 px-3 py-2 text-xs font-mono truncate max-w-[120px]
                                         border-b-2 transition-colors
-                                        ${selectedNs === ns
+                                        ${selectedNs === ns.name
                                         ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/30'
                                         : 'border-transparent text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400'
                                     }
                                     `}
                                 >
-                                    {ns}
+                                    {ns.name}
                                 </button>
                             ))}
                         </div>
@@ -206,7 +211,7 @@ function Sidebar() {
                     </div>
                 </div>
 
-                {/* Pinned Datasets  */}
+                {/*  Pinned Datasets  */}
                 <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-800">
                     <div className="px-3 py-2">
                         <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
@@ -219,7 +224,7 @@ function Sidebar() {
                 </div>
             </aside>
 
-            {/* Drag handle — 1px wide, full sidebar height */}
+            {/* Drag handle — 1px wide, full sidebar height  */}
             <div
                 onMouseDown={onMouseDown}
                 style={{ left: width }}

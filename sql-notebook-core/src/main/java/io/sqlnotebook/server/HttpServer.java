@@ -22,6 +22,7 @@ public class HttpServer {
         context.addServlet(new ServletHolder(new QueryHandler(executor)),     "/query");
         context.addServlet(new ServletHolder(new SchemaHandler(registry)),    "/schema/*");
         context.addServlet(new ServletHolder(new SystemHandler()),            "/system/*");
+        context.addServlet(new ServletHolder(new FileBrowserHandler()),         "/files/*");
 
         ServletHolder connectionHolder = new ServletHolder(new ConnectionHandler(registry));
         context.addServlet(connectionHolder, "/connections/*");
