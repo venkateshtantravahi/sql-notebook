@@ -4,9 +4,9 @@ import useZoomStore from '../../store/useZoomStore.js'
 function exportCSV(results) {
     if (!results) return
     const header = results.columns.join(',')
-    const rows   = results.rows.map(row =>
-        results.columns.map(col => {
-            const val = row[col]
+    const rows   = results.rows.map((row, _) =>
+        results.columns.map((col, colIdx) => {
+            const val = Array.isArray(row) ? row[colIdx] : row[col]
             if (val === null || val === undefined) return ''
             const str = String(val)
             return str.includes(',') || str.includes('"') || str.includes('\n')
@@ -19,7 +19,12 @@ function exportCSV(results) {
 
 function exportJSON(results) {
     if (!results) return
-    download(JSON.stringify(results.rows, null, 2), 'results.json', 'application/json')
+    const objects = results.rows.map(row =>
+        Object.fromEntries(
+            results.columns.map((col, i) => [col, Array.isArray(row) ? row[i] : row[col]])
+        )
+    )
+    download(JSON.stringify(objects, null, 2), 'results.json', 'application/json')
 }
 
 function download(content, filename, type) {
@@ -39,7 +44,13 @@ function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
     useEffect(() => {
         fetch('/namespaces')
             .then(r => r.ok ? r.json() : [])
-            .then(setNamespaces)
+            .then(data => {
+                if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
+                    setNamespaces(data.map(ns => ns.name))
+                } else {
+                    setNamespaces(data)
+                }
+                })
             .catch(() => setNamespaces([]))
     }, [])
 

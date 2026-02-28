@@ -14,6 +14,8 @@ export default defineConfig({
       '/query':       { target: 'http://localhost:8080', changeOrigin: true },
       '/schema':      { target: 'http://localhost:8080', changeOrigin: true },
       '/connections': { target: 'http://localhost:8080', changeOrigin: true },
+      '/system':      { target: 'http://localhost:8080', changeOrigin: true },
+      '/files':       { target: 'http://localhost:8080', changeOrigin: true },
       '/ws': {
         target:      'ws://localhost:8080',
         ws:          true,

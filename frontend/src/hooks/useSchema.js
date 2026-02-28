@@ -23,7 +23,11 @@ function useSchema() {
 
             const nsResp = await fetch('/namespaces')
             if (!nsResp.ok) throw new Error('Failed to fetch namespaces')
-            const namespaces = await nsResp.json()
+            const raw = await nsResp.json()
+
+            // /namespaces now returns health objects [{name, healthy, latencyMs}]
+            // Extract just the name strings for schema fetching
+            const namespaces = raw.map(ns => (typeof ns === 'string' ? ns : ns.name))
 
             if (namespaces.length === 0) {
                 setSchema([])
@@ -31,9 +35,9 @@ function useSchema() {
             }
 
             const results = await Promise.allSettled(
-                namespaces.map(ns =>
-                    fetch(`/schema/${ns}`).then(r => {
-                        if (!r.ok) throw new Error(`Failed to fetch schema for ${ns}`)
+                namespaces.map(name =>
+                    fetch(`/schema/${name}`).then(r => {
+                        if (!r.ok) throw new Error(`Failed to fetch schema for ${name}`)
                         return r.json()
                     })
                 )
