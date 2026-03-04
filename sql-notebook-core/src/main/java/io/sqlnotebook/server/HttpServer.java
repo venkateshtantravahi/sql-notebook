@@ -6,13 +6,29 @@ import org.eclipse.jetty.ee10.websocket.jakarta.server.config.JakartaWebSocketSe
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee10.servlet.ServletHolder;
+import org.eclipse.jetty.server.ServerConnector;
 
+/**
+ * Main HTTP server wrapper using Jetty.
+ * Configures both traditional REST endpoints and modern WebSocket endpoints.
+ */
 public class HttpServer {
 
     private final Server server;
 
+    /**
+     * Configures the server with routes and shared dependencies.
+     *
+     * @param port     The port to listen on.
+     * @param registry The registry to provide to the NamespaceHandler.
+     * @param executor The executor to provide to the QueryHandler and WebSocket.
+     */
     public HttpServer(int port, ConnectionRegistry registry, QueryExecutor executor) {
-        server = new Server(port);
+        server = new Server();
+        ServerConnector connector = new ServerConnector(server);
+        connector.setHost("127.0.0.1");
+        connector.setPort(port);
+        server.addConnector(connector);
         QueryWebsocket.setExecutor(executor);
 
         ServletContextHandler context = new ServletContextHandler();
@@ -21,6 +37,7 @@ public class HttpServer {
         context.addServlet(new ServletHolder(new NamespaceHandler(registry)), "/namespaces");
         context.addServlet(new ServletHolder(new QueryHandler(executor)),     "/query");
         context.addServlet(new ServletHolder(new SchemaHandler(registry)),    "/schema/*");
+        context.addServlet(new ServletHolder(new DraftHandler()), "/draft");
         context.addServlet(new ServletHolder(new SystemHandler()),            "/system/*");
         context.addServlet(new ServletHolder(new FileBrowserHandler()),         "/files/*");
 

@@ -7,6 +7,8 @@ import useNotebookStore     from '../../store/useNotebookStore.js'
 import useCellStore         from '../../store/useCellStore.js'
 import KeyboardShortcutsModal from '../modal/KeyboardShortcutsModal.jsx'
 import AboutModal             from '../modal/AboutModal.jsx'
+import { GoGear } from "react-icons/go";
+import { HiOutlinePencilSquare } from "react-icons/hi2";
 
 // ----─ menu definitions --------------------------------------------------------------------------------
 
@@ -60,8 +62,9 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
                 className={`
           text-xs px-3 py-1.5 rounded transition-colors
           ${open
-                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-800 dark:hover:text-gray-100'
+                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-amber-50'
+                    : 'text-gray-500 dark:text-amber-50 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-800' +
+                    ' dark:hover:text-gray-100'
                 }
         `}
             >
@@ -85,7 +88,7 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
                                     className="
                   w-full flex items-center justify-between
                   px-3 py-1.5 text-xs
-                  text-gray-700 dark:text-gray-300
+                  text-gray-700 dark:text-amber-50
                   hover:bg-gray-50 dark:hover:bg-gray-700
                   hover:text-gray-900 dark:hover:text-gray-100
                   transition-colors
@@ -93,7 +96,7 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
                                 >
                                     <span>{item.label}</span>
                                     {item.shortcut && (
-                                        <span className="ml-6 text-gray-400 dark:text-gray-500 font-mono">
+                                        <span className="ml-6 text-gray-400 dark:text-gray-50 font-mono">
                     {item.shortcut}
                   </span>
                                     )}
@@ -106,7 +109,7 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
     )
 }
 
-// ── editable notebook title --------------------------------------------------------------------------------
+//  editable notebook title --------------------------------------------------------------------------------
 
 function NotebookTitle({ onRename, editTriggerRef }) {
     const { title, isDirty, setTitle } = useNotebookStore()
@@ -171,24 +174,24 @@ function NotebookTitle({ onRename, editTriggerRef }) {
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Unsaved changes" />
             )}
             <span className="
-        text-gray-300 dark:text-gray-600
+        text-gray-300 dark:text-white
         group-hover:text-gray-400 dark:group-hover:text-gray-500
         text-xs transition-colors
       ">
-        ✎
+        <HiOutlinePencilSquare />
       </span>
         </button>
     )
 }
 
-// ── main header --------------------------------------------------------------------------------
+//  main header --------------------------------------------------------------------------------
 
 function Header() {
     const { theme, toggleTheme }   = useThemeStore()
     const { open: openConfig }     = useConfigModalStore()
     const { toggle: toggleSidebar } = useSidebarStore()
     const { zoomIn, zoomOut, reset: resetZoom } = useZoomStore()
-    const { save, load, newNotebook: newNb, setTitle } = useNotebookStore()
+    const { markSaved , newNotebook: newNb, setTitle } = useNotebookStore()
     const { getSnapshot, loadSnapshot, clearCells } = useCellStore()
     const titleEditRef = useRef(null)
 
@@ -214,7 +217,7 @@ function Header() {
         return () => document.removeEventListener('keydown', handle)
     }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-    // ── .sqlnb file format helpers --------------------------------------------------------------------------------
+    //  .sqlnb file format helpers --------------------------------------------------------------------------------
 
     async function writeSqlnbFile(fileHandle, data) {
         const writable = await fileHandle.createWritable()
@@ -252,7 +255,7 @@ function Header() {
                 })
             }
             await writeSqlnbFile(fileHandleRef.current, data)
-            save(snapshots)
+            markSaved()
         } catch (err) {
             if (err.name !== 'AbortError') console.error('Save failed', err)
         }
@@ -273,7 +276,7 @@ function Header() {
             })
             fileHandleRef.current = handle
             await writeSqlnbFile(handle, data)
-            save(snapshots)
+            markSaved()
         } catch (err) {
             if (err.name !== 'AbortError') console.error('Save As failed', err)
         }
@@ -281,8 +284,9 @@ function Header() {
 
     function handleNew() {
         if (window.confirm('Start a new notebook? Unsaved changes will be lost.')) {
-            newNb()
             clearCells()
+            newNb([])
+            fileHandleRef.current = null
         }
     }
 
@@ -393,12 +397,12 @@ function Header() {
                         onClick={toggleTheme}
                         className="
               text-xs px-3 py-1.5 rounded transition-colors
-              text-gray-500 dark:text-gray-400
+              text-gray-500 dark:text-gray-50
               hover:bg-gray-100 dark:hover:bg-gray-800
               hover:text-gray-700 dark:hover:text-gray-200
             "
                     >
-                        {theme === 'dark' ? '☀ Light' : '☾ Dark'}
+                        {theme === 'dark' ? '☀Light' : '☾ Dark'}
                     </button>
 
                     <button
@@ -410,7 +414,7 @@ function Header() {
               flex items-center gap-1.5
             "
                     >
-                        <span>⚙</span>
+                        <span><GoGear /></span>
                         <span>Config</span>
                     </button>
                 </div>

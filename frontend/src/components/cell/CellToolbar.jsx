@@ -67,6 +67,8 @@ function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
         >
             {/* Left — namespace dropdown */}
             <select
+                id={`namespace-${cell.id}`}
+                name={`namespace-${cell.id}`}
                 value={cell.namespace ?? ''}
                 onChange={e => onNamespaceChange(e.target.value)}
                 className="

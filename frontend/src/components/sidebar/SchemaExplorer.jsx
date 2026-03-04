@@ -53,7 +53,7 @@ function TableBlock({ table }) {
                 <span className="text-xs font-semibold font-mono text-gray-700 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-gray-100">
                     {table.name}
                 </span>
-                <span className="ml-auto text-xs text-gray-300 dark:text-gray-700">
+                <span className="ml-auto text-xs text-gray-300 dark:text-amber-50">
                     {table.columns.length}
                 </span>
             </div>
@@ -72,10 +72,10 @@ function NamespaceBlock({ ns }) {
         <div className="mb-4">
             <div className="px-3 py-1.5 mb-1 flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
-                <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 font-mono">
+                <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-white font-mono">
                     {ns.namespace}
                 </span>
-                <span className="ml-auto text-xs text-gray-300 dark:text-gray-700">
+                <span className="ml-auto text-xs text-gray-300 dark:text-white">
                     {ns.tables.length} tables
                 </span>
             </div>
@@ -157,7 +157,7 @@ function SchemaExplorer({ activeNamespace }) {
                         className={`
                             px-2.5 py-0.5 rounded text-xs font-medium transition-colors
                             ${view === v
-                            ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
+                            ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-white'
                             : 'text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400'
                         }
                         `}
