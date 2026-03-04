@@ -64,15 +64,48 @@ const useCellStore = create((set, get) => ({
     loadSnapshot: (snapshots) => {
         const cells = snapshots.map(s => makeCell({
             id:        s.id,
-            query:     s.query,
-            namespace: s.namespace,
+            query:     s.query ?? '',
+            namespace: s.namespace ?? null,
         }))
         // Keep nextId above any loaded id to avoid collisions
-        nextId = Math.max(...cells.map(c => c.id), nextId) + 1
+        if (cells.length > 0) {
+            nextId = Math.max(...cells.map(c => c.id)) + 1
+        }
         set({ cells })
     },
 
     clearCells: () => set({ cells: [] }),
+
+    // draft init
+    // called once on app mount Fetches GET /draft from backend.
+    // 200 -> cells + title into stores
+    // 204 -> first launch, stay blank
+    // error -> log and stay blank (never block app from starting)
+    initFromDraft: async () => {
+        try {
+            const res = await fetch('/draft')
+
+            if (res.status == 204) {
+                return { title: null }
+            }
+
+            if (!res.ok) {
+                console.warn('[draft] GET /draft returned', res.status, '-- starting blank')
+                return { title: null }
+            }
+
+            const data = await res.json()
+
+            if (Array.isArray(data.cells) && data.cells.length > 0) {
+                get().loadSnapshot(data.cells)
+            }
+
+            return { title: data.title ?? null }
+        } catch (error) {
+            console.warn('[draft] Could not reach backend for draft restore:', error.message)
+            return { title: null }
+        }
+    },
 }))
 
 export default useCellStore

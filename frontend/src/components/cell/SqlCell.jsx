@@ -10,8 +10,7 @@ import ResultsTable from './ResultsTable.jsx'
 import useZoomStore from '../../store/useZoomStore.js'
 import { useQuerySocket } from '../../hooks/useQuerySocket.js'
 
-// One Compartment per dynamic extension — lets us reconfigure them
-// independently without destroying and recreating the whole editor.
+
 const themeCompartment = new Compartment()
 const fontCompartment  = new Compartment()
 

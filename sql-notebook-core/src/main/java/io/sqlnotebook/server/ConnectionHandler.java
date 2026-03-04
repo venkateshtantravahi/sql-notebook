@@ -14,6 +14,7 @@ import tools.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -23,10 +24,8 @@ import java.util.stream.Collectors;
  *
  * POST   /connections/add    — write sql.properties + hot-load into registry
  * POST   /connections/test   — test JDBC connection without writing to disk
+ * PUT    /connections/:ns    — update existing connection (remove old + re-register new)
  * DELETE /connections/:ns    — remove from sql.properties + deregister from registry
- *
- * Every path has an explicit segment after /connections/ so Jetty's wildcard
- * mapping matches all of them without ambiguity.
  */
 public class ConnectionHandler extends HttpServlet {
 
@@ -34,6 +33,7 @@ public class ConnectionHandler extends HttpServlet {
             "mysql", "postgresql", "sqlite", "oracle", "microsoft-sql-server"
     );
 
+    private static final Set<String> RESERVED_PATHS = Set.of("add", "test");
     private static final String PROPERTIES_FILE = "sql.properties";
 
     private final ConnectionRegistry registry;
@@ -46,11 +46,50 @@ public class ConnectionHandler extends HttpServlet {
         this.mapper       = new ObjectMapper();
     }
 
-    // POST /connections/add  OR  POST /connections/test
+    // GET /connections/:namespace — return config without password (for edit pre-fill)
+
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        String pathInfo  = req.getPathInfo(); // "/:ns"
+        String namespace = (pathInfo != null) ? pathInfo.replaceFirst("^/", "").trim() : "";
+
+        if (namespace.isEmpty()) {
+            sendError(resp, 400, "Namespace is required");
+            return;
+        }
+
+        // Read directly from sql.properties — registry only stores pools, not configs
+        Map<String, ConnectionConfig> all;
+        try {
+            all = configParser.parse(PROPERTIES_FILE);
+        } catch (Exception e) {
+            sendError(resp, 500, "Failed to read config: " + e.getMessage());
+            return;
+        }
+
+        ConnectionConfig config = all.get(namespace);
+        if (config == null) {
+            sendError(resp, 404, "Unknown namespace: " + namespace);
+            return;
+        }
+
+        // Return full config — password intentionally omitted to avoid credential leaking
+        ObjectNode body = mapper.createObjectNode();
+        body.put("namespace", config.namespace());
+        body.put("type",      config.type());
+        body.put("host",      config.host());
+        body.put("port",      config.port());
+        body.put("database",  config.database());
+        body.put("username",  config.username());
+        // password: deliberately excluded
+        sendJson(resp, 200, body);
+    }
+
+    //  POST /connections/add  OR  /connections/test
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        String path = req.getPathInfo(); // "/add" or "/test"
+        String path = req.getPathInfo();
 
         if (!"/add".equals(path) && !"/test".equals(path)) {
             sendError(resp, 404, "Unknown endpoint. Use POST /connections/add or POST /connections/test");
@@ -65,10 +104,57 @@ public class ConnectionHandler extends HttpServlet {
             return;
         }
 
-        if ("/test".equals(path)) {
-            handleTest(config, resp);
-        } else {
-            handleConnect(config, resp);
+        if ("/test".equals(path)) handleTest(config, resp);
+        else                      handleConnect(config, resp);
+    }
+
+    // PUT /connections/:oldNamespace
+
+    /**
+     * Update an existing connection.
+     * The namespace in the URL is the OLD name (supports rename).
+     * The namespace in the request body is the NEW name.
+     */
+    @Override
+    protected void doPut(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        String pathInfo     = req.getPathInfo();
+        String oldNamespace = (pathInfo != null) ? pathInfo.replaceFirst("^/", "").trim() : "";
+
+        if (oldNamespace.isEmpty() || RESERVED_PATHS.contains(oldNamespace)) {
+            sendError(resp, 400, "Valid namespace required in path: PUT /connections/:ns");
+            return;
+        }
+        if (!registry.hasNamespace(oldNamespace)) {
+            sendError(resp, 404, "Unknown namespace: " + oldNamespace);
+            return;
+        }
+
+        ConnectionConfig newConfig;
+        try {
+            newConfig = parseBody(req);
+        } catch (IllegalArgumentException e) {
+            sendError(resp, 400, e.getMessage());
+            return;
+        }
+
+        // If renaming, ensure the new name isn't already taken
+        if (!oldNamespace.equals(newConfig.namespace()) && registry.hasNamespace(newConfig.namespace())) {
+            sendError(resp, 409, "Namespace '" + newConfig.namespace() + "' already exists");
+            return;
+        }
+
+        try {
+            configParser.remove(PROPERTIES_FILE, oldNamespace);
+            registry.deregister(oldNamespace);
+            ConfigParser.write(PROPERTIES_FILE, newConfig);
+            registry.register(newConfig);
+
+            ObjectNode body = mapper.createObjectNode();
+            body.put("namespace", newConfig.namespace());
+            body.put("message",   "Connection updated");
+            sendJson(resp, 200, body);
+        } catch (Exception e) {
+            sendError(resp, 500, "Failed to update connection: " + e.getMessage());
         }
     }
 
@@ -76,20 +162,17 @@ public class ConnectionHandler extends HttpServlet {
 
     @Override
     protected void doDelete(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        String pathInfo  = req.getPathInfo(); // "/prod_mysql"
+        String pathInfo  = req.getPathInfo();
         String namespace = (pathInfo != null) ? pathInfo.replaceFirst("^/", "").trim() : "";
 
         if (namespace.isEmpty()) {
             sendError(resp, 400, "Namespace is required");
             return;
         }
-
-        // Guard against accidentally routing /add or /test to delete
-        if ("add".equals(namespace) || "test".equals(namespace)) {
+        if (RESERVED_PATHS.contains(namespace)) {
             sendError(resp, 400, "'" + namespace + "' is a reserved path");
             return;
         }
-
         if (!registry.hasNamespace(namespace)) {
             sendError(resp, 404, "Unknown namespace: " + namespace);
             return;
@@ -103,7 +186,6 @@ public class ConnectionHandler extends HttpServlet {
             body.put("namespace", namespace);
             body.put("message",   "Connection removed");
             sendJson(resp, 200, body);
-
         } catch (Exception e) {
             sendError(resp, 500, "Failed to remove connection: " + e.getMessage());
         }
@@ -122,10 +204,8 @@ public class ConnectionHandler extends HttpServlet {
             return;
         }
 
-        String jdbcUrl = buildJdbcUrl(config);
-
         try (Connection conn = DriverManager.getConnection(
-                jdbcUrl, config.username(), config.password())) {
+                buildJdbcUrl(config), config.username(), config.password())) {
             conn.isValid(5);
             ObjectNode body = mapper.createObjectNode();
             body.put("success", true);
@@ -144,7 +224,6 @@ public class ConnectionHandler extends HttpServlet {
             sendError(resp, 409, "Namespace '" + config.namespace() + "' already exists");
             return;
         }
-
         try {
             ConfigParser.write(PROPERTIES_FILE, config);
             registry.register(config);
@@ -153,7 +232,6 @@ public class ConnectionHandler extends HttpServlet {
             body.put("namespace", config.namespace());
             body.put("message",   "Connection added");
             sendJson(resp, 201, body);
-
         } catch (ConnectionRegistryException e) {
             try { configParser.remove(PROPERTIES_FILE, config.namespace()); } catch (Exception ignored) {}
             sendError(resp, 500, "Failed to register connection: " + e.getMessage());

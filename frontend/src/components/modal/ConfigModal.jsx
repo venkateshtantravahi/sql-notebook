@@ -10,7 +10,10 @@ const DB_TYPES = [
     { value: 'mssql',    label: 'SQL Server',  defaultPort: 1433,  backendType: 'microsoft-sql-server' },
 ]
 
-const EMPTY_FORM = { namespace: '', type: 'mysql', host: 'localhost', port: '3306', database: '', username: '', password: '' }
+const EMPTY_FORM = {
+    namespace: '', type: 'mysql', host: 'localhost',
+    port: '3306', database: '', username: '', password: ''
+}
 
 function Field({ label, error, children }) {
     return (
@@ -37,7 +40,7 @@ function Input({ className = '', ...props }) {
     )
 }
 
-function validate(form) {
+function validate(form, isEdit) {
     const errors = {}
     if (!form.namespace.trim())
         errors.namespace = 'Namespace name is required'
@@ -67,8 +70,16 @@ function buildPayload(form) {
     }
 }
 
+// Reverse map backend type → form value
+function backendTypeToFormValue(backendType) {
+    const found = DB_TYPES.find(d => d.backendType === backendType)
+    return found?.value ?? 'mysql'
+}
+
 function ConfigModal() {
-    const { isOpen, close } = useConfigModalStore()
+    const { isOpen, close, editConnection } = useConfigModalStore()
+    const isEdit = !!editConnection  // editConnection = { namespace, type, host, port, database, username }
+
     const [form, setForm]           = useState(EMPTY_FORM)
     const [errors, setErrors]       = useState({})
     const [status, setStatus]       = useState(null)
@@ -79,7 +90,7 @@ function ConfigModal() {
     const overlayRef = useRef(null)
     const isSQLite   = form.type === 'sqlite'
 
-    // Fetch server home dir once — used as starting point for file browser
+    // Fetch server home dir once
     useEffect(() => {
         fetch('/system/info')
             .then(r => r.ok ? r.json() : null)
@@ -90,15 +101,29 @@ function ConfigModal() {
             .catch(() => {})
     }, [])
 
+    // When modal opens reset or pre-fill
     useEffect(() => {
-        if (isOpen) {
+        if (!isOpen) return
+        setErrors({})
+        setStatus(null)
+        setStatusMsg('')
+        setShowBrowser(false)
+
+        if (isEdit && editConnection) {
+            // Pre-fill form with existing connection data
+            setForm({
+                namespace: editConnection.namespace ?? '',
+                type:      backendTypeToFormValue(editConnection.type ?? 'mysql'),
+                host:      editConnection.host     ?? 'localhost',
+                port:      editConnection.port     ? String(editConnection.port) : '3306',
+                database:  editConnection.database ?? '',
+                username:  editConnection.username ?? '',
+                password:  '',  // never pre-fill password for security
+            })
+        } else {
             setForm(EMPTY_FORM)
-            setErrors({})
-            setStatus(null)
-            setStatusMsg('')
-            setShowBrowser(false)
         }
-    }, [isOpen])
+    }, [isOpen, isEdit, editConnection])
 
     useEffect(() => {
         if (!isOpen) return
@@ -117,16 +142,15 @@ function ConfigModal() {
             if (field === 'type') {
                 const dbType = DB_TYPES.find(d => d.value === value)
                 next.port     = dbType?.defaultPort?.toString() ?? ''
-                next.database = value === 'sqlite' && homeDir
+                next.database = value === 'sqlite' && homeDir && !isEdit
                     ? `${homeDir}${separator}`
-                    : ''
+                    : prev.database
             }
             return next
         })
         setErrors(prev => ({ ...prev, [field]: undefined }))
     }
 
-    // Called when user picks a file from the browser modal
     function handleFilePicked(absolutePath) {
         setForm(prev => ({ ...prev, database: absolutePath }))
         setErrors(prev => ({ ...prev, database: undefined }))
@@ -134,7 +158,7 @@ function ConfigModal() {
     }
 
     async function handleTestConnection() {
-        const errs = validate(form)
+        const errs = validate(form, isEdit)
         if (Object.keys(errs).length > 0) { setErrors(errs); return }
         setStatus('testing'); setStatusMsg('')
         try {
@@ -150,24 +174,44 @@ function ConfigModal() {
         }
     }
 
-    async function handleConnect() {
-        const errs = validate(form)
+    async function handleSave() {
+        const errs = validate(form, isEdit)
         if (Object.keys(errs).length > 0) { setErrors(errs); return }
         setStatus('connecting'); setStatusMsg('')
+
         try {
-            const res  = await fetch('/connections/add', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(buildPayload(form)),
-            })
-            const data = await res.json()
-            if (res.status === 201) {
-                setStatus('success'); setStatusMsg('✓ Connection added')
-                window.dispatchEvent(new CustomEvent('namespace-added'))
-                setTimeout(close, 900)
-            } else if (res.status === 409) {
-                setStatus('error'); setStatusMsg('✗ Namespace already exists')
+            let res, data
+
+            if (isEdit) {
+                // PUT /connections/:oldNamespace
+                res  = await fetch(`/connections/${editConnection.namespace}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(buildPayload(form)),
+                })
+                data = await res.json()
+                if (res.ok) {
+                    setStatus('success'); setStatusMsg('✓ Connection updated')
+                    window.dispatchEvent(new CustomEvent('namespace-added'))
+                    setTimeout(close, 900)
+                } else {
+                    setStatus('error'); setStatusMsg('✗ ' + (data.error ?? 'Update failed'))
+                }
             } else {
-                setStatus('error'); setStatusMsg('✗ ' + (data.error ?? 'Failed to add connection'))
+                // POST /connections/add
+                res  = await fetch('/connections/add', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(buildPayload(form)),
+                })
+                data = await res.json()
+                if (res.status === 201) {
+                    setStatus('success'); setStatusMsg('✓ Connection added')
+                    window.dispatchEvent(new CustomEvent('namespace-added'))
+                    setTimeout(close, 900)
+                } else if (res.status === 409) {
+                    setStatus('error'); setStatusMsg('✗ Namespace already exists')
+                } else {
+                    setStatus('error'); setStatusMsg('✗ ' + (data.error ?? 'Failed to add connection'))
+                }
             }
         } catch {
             setStatus('error'); setStatusMsg('✗ Could not reach backend')
@@ -191,8 +235,14 @@ function ConfigModal() {
                     {/* Header */}
                     <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
                         <div>
-                            <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Add Database Connection</h2>
-                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Configure a new namespace to query against</p>
+                            <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                                {isEdit ? `Edit Connection — ${editConnection.namespace}` : 'Add Database Connection'}
+                            </h2>
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                                {isEdit
+                                    ? 'Update credentials or rename this namespace'
+                                    : 'Configure a new namespace to query against'}
+                            </p>
                         </div>
                         <button onClick={close} className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 text-lg leading-none transition-colors">✕</button>
                     </div>
@@ -227,7 +277,6 @@ function ConfigModal() {
                             </div>
                         )}
 
-                        {/* Database / file path */}
                         <Field label={isSQLite ? 'File path *' : 'Database name *'} error={errors.database}>
                             {isSQLite ? (
                                 <div className="flex gap-2">
@@ -238,21 +287,9 @@ function ConfigModal() {
                                         onChange={e => handleChange('database', e.target.value)}
                                         className="flex-1 min-w-0"
                                     />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowBrowser(true)}
-                                        className="
-                                            flex-shrink-0 px-3 py-2 rounded text-xs font-mono
-                                            border border-gray-200 dark:border-gray-700
-                                            bg-gray-50 dark:bg-gray-800
-                                            text-gray-600 dark:text-gray-400
-                                            hover:bg-blue-50 dark:hover:bg-blue-950/30
-                                            hover:text-blue-600 dark:hover:text-blue-400
-                                            hover:border-blue-300 dark:hover:border-blue-700
-                                            transition-colors
-                                        "
-                                        title="Browse filesystem for .db file"
-                                    >
+                                    <button type="button" onClick={() => setShowBrowser(true)}
+                                            className="flex-shrink-0 px-3 py-2 rounded text-xs font-mono border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
+                                            title="Browse filesystem for .db file">
                                         📁 Browse
                                     </button>
                                 </div>
@@ -268,7 +305,7 @@ function ConfigModal() {
                                     <Input type="text" placeholder="root" value={form.username}
                                            onChange={e => handleChange('username', e.target.value)} />
                                 </Field>
-                                <Field label="Password">
+                                <Field label={isEdit ? 'Password (leave blank to keep)' : 'Password'}>
                                     <Input type="password" placeholder="••••••••" value={form.password}
                                            onChange={e => handleChange('password', e.target.value)} />
                                 </Field>
@@ -298,17 +335,18 @@ function ConfigModal() {
                                     className="text-xs px-4 py-2 rounded transition-colors text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
                                 Cancel
                             </button>
-                            <button onClick={handleConnect}
+                            <button onClick={handleSave}
                                     disabled={status === 'testing' || status === 'connecting'}
                                     className="text-xs px-4 py-2 rounded transition-colors bg-blue-600 hover:bg-blue-500 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed">
-                                {status === 'connecting' ? 'Connecting...' : 'Connect'}
+                                {status === 'connecting'
+                                    ? (isEdit ? 'Saving...' : 'Connecting...')
+                                    : (isEdit ? 'Save Changes' : 'Connect')}
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* File browser — renders above ConfigModal at z-60 */}
             <FileBrowserModal
                 isOpen={showBrowser}
                 initialPath={homeDir}

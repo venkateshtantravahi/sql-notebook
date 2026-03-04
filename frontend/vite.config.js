@@ -13,6 +13,7 @@ export default defineConfig({
       '/namespaces':  { target: 'http://localhost:8080', changeOrigin: true },
       '/query':       { target: 'http://localhost:8080', changeOrigin: true },
       '/schema':      { target: 'http://localhost:8080', changeOrigin: true },
+      '/draft':       { target: 'http://localhost:8080', changeOrigin: true },
       '/connections': { target: 'http://localhost:8080', changeOrigin: true },
       '/system':      { target: 'http://localhost:8080', changeOrigin: true },
       '/files':       { target: 'http://localhost:8080', changeOrigin: true },
