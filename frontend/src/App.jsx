@@ -5,7 +5,6 @@ import MainArea from "./components/layout/MainArea.jsx";
 import BottomBar from "./components/layout/BottomBar.jsx";
 import ConfigModal from "./components/modal/ConfigModal.jsx";
 import SplashScreen from "./components/common/SplashScreen.jsx";
-import useAutoSave from "./hooks/useAutoSave.js";
 import useNotebookStore from "./store/useNotebookStore.js";
 import useCellStore from "./store/useCellStore.js";
 import {useEffect, useRef, useState } from "react";
