@@ -77,4 +77,4 @@ export const SqlNotebookMark = ({ size = 20, dark = false }) => {
     );
 };
 
-export default SqlNotebookLogo;
+// export default SqlNotebookLogo;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { SqlNotebookLogo } from './sqlNotebookLogo.jsx'
+import { SqlNotebookLogo } from './SqlNotebookLogo'
 
 /**
  * SplashScreen
