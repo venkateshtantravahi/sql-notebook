@@ -5,6 +5,7 @@ import useSidebarStore      from '../../store/useSidebarStore.js'
 import useZoomStore         from '../../store/useZoomStore.js'
 import useNotebookStore     from '../../store/useNotebookStore.js'
 import useCellStore         from '../../store/useCellStore.js'
+import {SqlNotebookMark} from "../common/SqlNotebookLogo.jsx";
 import KeyboardShortcutsModal from '../modal/KeyboardShortcutsModal.jsx'
 import AboutModal             from '../modal/AboutModal.jsx'
 import { GoGear } from "react-icons/go";
@@ -199,7 +200,7 @@ function Header() {
     const [showShortcuts,  setShowShortcuts ] = useState(false)
     const [showAbout,      setShowAbout     ] = useState(false)
 
-    // ── global keyboard shortcuts --------------------------------------------------------------------------------
+    // global keyboard shortcuts --------------------------------------------------------------------------------
     useEffect(() => {
         function handle(e) {
             const mod = e.metaKey || e.ctrlKey
@@ -364,9 +365,10 @@ function Header() {
       ">
                 {/* Left — logo + app name */}
                 <div className="flex items-center gap-2 w-40">
-                    <div className="w-5 h-5 rounded bg-blue-600 flex items-center justify-center flex-shrink-0">
-                        <span className="text-white text-xs font-bold">S</span>
-                    </div>
+                    {/*<div className="w-5 h-5 rounded bg-blue-600 flex items-center justify-center flex-shrink-0">*/}
+                    {/*    <span className="text-white text-xs font-bold">S</span>*/}
+                    {/*</div>*/}
+                    <SqlNotebookMark size={28} dark={theme === 'dark'} />
                     <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 tracking-wide whitespace-nowrap">
             sql-notebook
           </span>
