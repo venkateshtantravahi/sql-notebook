@@ -2,37 +2,22 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import SchemaExplorer      from '../sidebar/SchemaExplorer.jsx'
 import useSidebarStore     from '../../store/useSidebarStore.js'
 import useConfigModalStore from '../../store/useConfigModalStore.js'
-import useHistoryStore     from '../../store/useHistoryStore.js'
 import { useNamespaceRefresh } from '../../hooks/useNamespaceRefresh.js'
 import { MdEdit, MdDelete } from "react-icons/md";
 import { BsThreeDots } from "react-icons/bs";
-import { TbLayoutSidebarLeftExpandFilled, TbLayoutNavbarExpandFilled } from "react-icons/tb";
 
 const MIN_WIDTH     = 180
 const MAX_WIDTH     = 520
 const DEFAULT_WIDTH = 288
 
-function relativeTime(isoString) {
-    const diff = Date.now() - new Date(isoString).getTime()
-    const s    = Math.floor(diff / 1000)
-    if (s < 60)  return `${s}s ago`
-    const m = Math.floor(s / 60)
-    if (m < 60)  return `${m}m ago`
-    const h = Math.floor(m / 60)
-    if (h < 24)  return `${h}h ago`
-    return `${Math.floor(h / 24)}d ago`
-}
-
 function Sidebar() {
     const { isOpen }   = useSidebarStore()
     const { openEdit } = useConfigModalStore()
-    const { entries: history, removeEntry, clearHistory } = useHistoryStore()
 
     const [namespaces,   setNamespaces]   = useState([])
     const [selectedNs,   setSelectedNs]   = useState(null)
     const [deletingNs,   setDeletingNs]   = useState(null)
     const [width,        setWidth]        = useState(DEFAULT_WIDTH)
-    const [historyOpen,  setHistoryOpen]  = useState(false)
 
     const dragging = useRef(false)
     const startX   = useRef(0)
@@ -237,72 +222,6 @@ function Sidebar() {
                     <div className="flex-1 overflow-y-auto">
                         <SchemaExplorer activeNamespace={selectedNs} />
                     </div>
-                </div>
-
-                {/* Query History */}
-                <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-800">
-                    <button
-                        onClick={() => setHistoryOpen(h => !h)}
-                        className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    >
-                        <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-amber-50">
-                            Query History
-                        </span>
-                        <div className="flex items-center gap-2">
-                            {history.length > 0 && (
-                                <span className="text-xs tabular-nums text-gray-400 dark:text-amber-50">
-                                    {history.length}
-                                </span>
-                            )}
-                            <span className="text-xs text-gray-400 dark:text-white">
-                                {historyOpen ? <TbLayoutNavbarExpandFilled /> : <TbLayoutSidebarLeftExpandFilled />}
-                            </span>
-                        </div>
-                    </button>
-
-                    {historyOpen && (
-                        <div className="max-h-48 overflow-y-auto">
-                            {history.length === 0 ? (
-                                <p className="px-3 pb-2 text-xs text-gray-400 dark:text-white italic">
-                                    No queries run yet
-                                </p>
-                            ) : (
-                                <>
-                                    <div className="px-3 pb-1 flex justify-end">
-                                        <button
-                                            onClick={clearHistory}
-                                            className="text-xs text-gray-400 dark:text-white hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                                        >
-                                            Clear all
-                                        </button>
-                                    </div>
-                                    {history.map(entry => (
-                                        <div
-                                            key={entry.id}
-                                            className="group px-3 py-1.5 flex items-start gap-2 hover:bg-gray-100 dark:hover:bg-amber-50 transition-colors"
-                                        >
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-xs font-mono text-gray-700 dark:text-gray-200 truncate">
-                                                    {entry.query}
-                                                </p>
-                                                <p className="text-xs text-gray-400 dark:text-gray-50 mt-0.5">
-                                                    <span className="font-mono">{entry.namespace}</span>
-                                                    {' · '}{entry.rowCount} rows
-                                                    {' · '}{entry.duration}ms
-                                                    {' · '}{relativeTime(entry.executedAt)}
-                                                </p>
-                                            </div>
-                                            <button
-                                                onClick={() => removeEntry(entry.id)}
-                                                title="Remove"
-                                                className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-xs text-gray-500 dark:text-amber-50 hover:text-red-500 dark:hover:text-red-400 transition-all mt-0.5"
-                                            >✕</button>
-                                        </div>
-                                    ))}
-                                </>
-                            )}
-                        </div>
-                    )}
                 </div>
             </aside>
 
