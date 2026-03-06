@@ -1,10 +1,23 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    dedupe: ['react', 'react-dom'],
+  },
   optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'reactflow',
+      '@reactflow/core',
+      '@reactflow/background',
+      '@reactflow/controls',
+      '@reactflow/minimap',
+    ],
     exclude: ['tailwindcss/defaultTheme'],
   },
   server: {
@@ -27,5 +40,8 @@ export default defineConfig({
   build: {
     outDir: '../sql-notebook-core/src/main/resources/static',
     emptyOutDir: true,
+    rollupOptions: {
+      external: [],
+    },
   },
 })
