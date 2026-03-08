@@ -46,7 +46,10 @@ public class NamespaceHandler extends HttpServlet {
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
-        Set<String> namespaces = registry.getNamespaces();
+        boolean all = "true".equalsIgnoreCase(req.getParameter("all"));
+        Set<String> namespaces = registry.getNamespaces().stream()
+                .filter(ns -> all || !registry.isEphemeral(ns))
+                .collect(java.util.stream.Collectors.toSet());
 
         //ping all namespaces in parllel
         List<Future<Map<String, Object>>> futures = new ArrayList<>();

@@ -1,6 +1,8 @@
 package io.sqlnotebook.server;
 
 import io.sqlnotebook.connection.ConnectionRegistry;
+import io.sqlnotebook.duckdb.DuckDbRegistrar;
+import io.sqlnotebook.duckdb.FileSourceRegistry;
 import io.sqlnotebook.executor.QueryExecutor;
 import org.eclipse.jetty.ee10.websocket.jakarta.server.config.JakartaWebSocketServletContainerInitializer;
 import org.eclipse.jetty.server.Server;
@@ -11,6 +13,25 @@ import org.eclipse.jetty.server.ServerConnector;
 /**
  * Main HTTP server wrapper using Jetty.
  * Configures both traditional REST endpoints and modern WebSocket endpoints.
+ *
+ * Binds exclusively to 127.0.0.1 — never 0.0.0.0 — so the server is only
+ * reachable from this machine.
+ *
+ * Routes:
+ *   GET    /namespaces          — list active namespaces
+ *   POST   /query               — one-shot SQL query
+ *   GET    /schema/*            — schema introspection
+ *   POST   /connections/add     — add persistent JDBC connection
+ *   POST   /connections/test    — test connection without saving
+ *   PUT    /connections/:ns     — edit existing connection
+ *   DELETE /connections/:ns     — remove persistent connection
+ *   GET    /draft               — load notebook draft
+ *   POST   /draft               — save notebook draft
+ *   POST   /sources/upload      — upload local file as DuckDB namespace
+ *   POST   /sources/remote      — register HTTP/S3 URL as DuckDB namespace
+ *   GET    /sources             — list all file/remote sources
+ *   DELETE /sources/:namespace  — remove file/remote source
+ *   WS     /ws                  — query WebSocket
  */
 public class HttpServer {
 
@@ -22,8 +43,10 @@ public class HttpServer {
      * @param port     The port to listen on.
      * @param registry The registry to provide to the NamespaceHandler.
      * @param executor The executor to provide to the QueryHandler and WebSocket.
+     * @param sourceRegistry File/remote source registry for the data source feature.
      */
-    public HttpServer(int port, ConnectionRegistry registry, QueryExecutor executor) {
+    public HttpServer(int port, ConnectionRegistry registry, QueryExecutor executor,
+                      FileSourceRegistry sourceRegistry,  DuckDbRegistrar registrar) {
         server = new Server();
         ServerConnector connector = new ServerConnector(server);
         connector.setHost("127.0.0.1");
@@ -40,7 +63,7 @@ public class HttpServer {
         context.addServlet(new ServletHolder(new DraftHandler()), "/draft");
         context.addServlet(new ServletHolder(new SystemHandler()),            "/system/*");
         context.addServlet(new ServletHolder(new FileBrowserHandler()),         "/files/*");
-
+        context.addServlet(new ServletHolder(new FileSourceHandler(sourceRegistry, registrar)), "/sources/*");
         ServletHolder connectionHolder = new ServletHolder(new ConnectionHandler(registry));
         context.addServlet(connectionHolder, "/connections/*");
 

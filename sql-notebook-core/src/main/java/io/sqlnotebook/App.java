@@ -6,25 +6,34 @@ package io.sqlnotebook;
 import io.sqlnotebook.config.ConfigParser;
 import io.sqlnotebook.config.ConnectionConfig;
 import io.sqlnotebook.connection.ConnectionRegistry;
+import io.sqlnotebook.duckdb.DuckDbRegistrar;
+import io.sqlnotebook.duckdb.FileSourceRegistry;
 import io.sqlnotebook.executor.QueryExecutor;
 import io.sqlnotebook.server.HttpServer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.util.Collections;
 import java.util.Map;
 
 /**
  * Application entry point.
  *
  * Startup sequence:
- * 1. Look for sql.properties in the working directory
- * 2. Parse any existing namespace configurations
- * 3. Initialise ConnectionRegistry with those configs (empty map is fine)
- * 4. Start HttpServer on port 8080
- * 5. Register shutdown hook to cleanly close all connection pools
+ *   1. Parse sql.properties → ConnectionRegistry (persistent JDBC connections)
+ *   2. Build DuckDbRegistrar (creates ~/.sqlnotebook/duckdb/ and uploads/ dirs)
+ *   3. Build FileSourceRegistry → rehydrate sources.json (re-registers all
+ *      file and remote data sources from the previous session)
+ *   4. Start HttpServer on localhost:4000
+ *   5. Register JVM shutdown hook to cleanly close all pools
  *
- * sql.properties is optional — the app starts with no connections and
- * the user adds them via the ⚙ Config UI.
+ * sql.properties is optional — the app starts fine with no JDBC connections
+ * configured (the user can add them at runtime via /connections/add).
  */
 public class App {
+
+    private static final Logger log = LoggerFactory.getLogger(App.class);
 
     private static final int    DEFAULT_PORT   = 8080;
     private static final String CONFIG_FILE    = "sql.properties";
@@ -32,46 +41,68 @@ public class App {
     public static void main(String[] args) throws Exception {
         int port = parsePort(args);
 
-        // Step 1 — parse sql.properties (returns empty map if file missing)
-        ConfigParser parser = new ConfigParser();
-        Map<String, ConnectionConfig> configs = parser.parse(CONFIG_FILE);
+        // Step 1 — Persistant JDBC connection
+        Map<String, ConnectionConfig> configs = loadConfigs();
+        ConnectionRegistry registry = new  ConnectionRegistry(configs);
+        log.info("[startup] loaded {} persistant connection(s)", configs.size());
 
-        if (configs.isEmpty()) {
-            System.out.println("[sql-notebook] No sql.properties found — " +
-                    "starting with no connections. Use ⚙ Config to add one.");
-        } else {
-            System.out.println("[sql-notebook] Loaded " + configs.size() +
-                    " namespace(s): " + configs.keySet());
-        }
+        // Step 2 — DuckDB registrar
+        DuckDbRegistrar duckDbRegistrar = new DuckDbRegistrar(registry);
+        log.info("[startup] DuckDB registrar loaded");
 
-        // Step 2 — initialise registry and executor
-        ConnectionRegistry registry = new ConnectionRegistry(configs);
-        QueryExecutor      executor = new QueryExecutor(registry);
+        // Step 3 — File Source registry
+        FileSourceRegistry sourceRegistry = new FileSourceRegistry(duckDbRegistrar);
+        sourceRegistry.rehydrate();
+        log.info("[startup] file source registry ready ({} source(s) rehydrated)", sourceRegistry.list().size());
 
-        // Step 3 — start HTTP server
-        HttpServer server = new HttpServer(port, registry, executor);
+        // Step 4 — Http server
+        QueryExecutor executor = new QueryExecutor(registry);
+        HttpServer server = new HttpServer(port, registry, executor, sourceRegistry, duckDbRegistrar);
         server.start();
-        System.out.println("[sql-notebook] Server started on http://localhost:" + port);
+        log.info("[startup] server listening on http://127.0.0.1:{}", server.getPort());
 
-        // Step 4 — shutdown hook
+        // Step 5 - Shutdown hook
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("[sql-notebook] Shutting down...");
-            try { server.stop(); } catch (Exception e) { /* best effort */ }
+            log.info("[shutdown] stopping server...");
+            try { server.stop(); } catch (Exception e) {
+                log.warn("[shutdown] error stopping server: {}", e.getMessage());
+            }
             registry.shutdown();
-            System.out.println("[sql-notebook] Shutdown complete.");
-        }));
+            log.info("[shutdown] server stopped");
+        }, "shutdown-hook"));
 
         server.join();
     }
 
+    /**
+     * Parse sql.properties if it exists — silently returns empty map if absent.
+     * The app is fully functional without any pre-configured JDBC connections.
+     */
+    private static Map<String, ConnectionConfig> loadConfigs() {
+        File propsFile = new File(CONFIG_FILE);
+        if (!propsFile.exists()) {
+            log.info("[startup] no sql.properties found — starting with no persistent connections");
+            return Collections.emptyMap();
+        }
+        try {
+            return new ConfigParser().parse(CONFIG_FILE);
+        } catch (Exception e) {
+            log.warn("[startup] failed to parse sql.properties: {} — starting with no connections",
+                    e.getMessage());
+            return Collections.emptyMap();
+        }
+    }
+
+    /**
+     * Allow port override via first CLI arg: java -jar app.jar port_num
+     * Falls back to DEFAULT_PORT (8080) if absent or invalid.
+     */
     private static int parsePort(String[] args) {
         if (args.length > 0) {
             try {
-                return Integer.parseInt(args[0]);
-            } catch (NumberFormatException e) {
-                System.err.println("[sql-notebook] Invalid port '" + args[0] +
-                        "' — using default " + DEFAULT_PORT);
-            }
+                int port = Integer.parseInt(args[0]);
+                if (port > 0 && port < 65536) return port;
+            } catch (NumberFormatException ignored) {}
         }
         return DEFAULT_PORT;
     }

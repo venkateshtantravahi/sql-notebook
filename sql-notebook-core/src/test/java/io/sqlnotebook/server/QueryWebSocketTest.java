@@ -2,6 +2,8 @@ package io.sqlnotebook.server;
 
 import io.sqlnotebook.config.ConnectionConfig;
 import io.sqlnotebook.connection.ConnectionRegistry;
+import io.sqlnotebook.duckdb.DuckDbRegistrar;
+import io.sqlnotebook.duckdb.FileSourceRegistry;
 import io.sqlnotebook.executor.QueryExecutor;
 import jakarta.websocket.*;
 import org.junit.jupiter.api.AfterEach;
@@ -40,8 +42,10 @@ class QueryWebSocketTest {
                 postgres.getDatabaseName(), postgres.getUsername(), postgres.getPassword(), 5
         );
         registry   = new ConnectionRegistry(Map.of("test", config));
+        DuckDbRegistrar registrar = new DuckDbRegistrar(registry);
+        FileSourceRegistry sourceRegistry = new FileSourceRegistry(registrar);
         executor   = new QueryExecutor(registry);
-        httpServer = new HttpServer(0, registry, executor);
+        httpServer = new HttpServer(0, registry, executor, sourceRegistry,  registrar);
         httpServer.start();
     }
 

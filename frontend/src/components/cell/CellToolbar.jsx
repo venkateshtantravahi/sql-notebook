@@ -42,7 +42,7 @@ function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
 
     // Fetch live namespaces from backend
     useEffect(() => {
-        fetch('/namespaces')
+        fetch('/namespaces?all=true')
             .then(r => r.ok ? r.json() : [])
             .then(data => {
                 if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {

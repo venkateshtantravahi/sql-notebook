@@ -2,6 +2,8 @@ package io.sqlnotebook.server;
 
 import io.sqlnotebook.config.ConnectionConfig;
 import io.sqlnotebook.connection.ConnectionRegistry;
+import io.sqlnotebook.duckdb.DuckDbRegistrar;
+import io.sqlnotebook.duckdb.FileSourceRegistry;
 import io.sqlnotebook.executor.QueryExecutor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,8 +36,10 @@ class HttpServerTest {
     @BeforeEach
     void setUp() throws Exception {
         registry = new ConnectionRegistry(Map.of("pg", postgresConfig()));
+        DuckDbRegistrar registrar = new DuckDbRegistrar(registry);
+        FileSourceRegistry sourceRegistry = new FileSourceRegistry(registrar);
         executor = new QueryExecutor(registry);
-        server   = new HttpServer(PORT, registry, executor);
+        server   = new HttpServer(PORT, registry, executor,  sourceRegistry, registrar);
         server.start();
         client = HttpClient.newHttpClient();
 

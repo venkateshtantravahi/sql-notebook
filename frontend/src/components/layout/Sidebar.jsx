@@ -3,16 +3,130 @@ import SchemaExplorer      from '../sidebar/SchemaExplorer.jsx'
 import useSidebarStore     from '../../store/useSidebarStore.js'
 import useConfigModalStore from '../../store/useConfigModalStore.js'
 import { useNamespaceRefresh } from '../../hooks/useNamespaceRefresh.js'
-import { MdEdit, MdDelete } from "react-icons/md";
-import { BsThreeDots } from "react-icons/bs";
+import {MdEdit, MdDelete, MdOutlineCancel} from "react-icons/md";
+import {BsFiletypeJson, BsFiletypeXlsx, BsThreeDots} from "react-icons/bs";
+import {IoGlobeOutline} from "react-icons/io5";
+import {TbFileArrowRight, TbFileDatabase, TbFileTypeCsv} from "react-icons/tb";
+import {FaRegFileAlt, FaRegFolderOpen} from "react-icons/fa";
+import {LuFileJson} from "react-icons/lu";
+import {SiApacheparquet} from "react-icons/si";
 
 const MIN_WIDTH     = 180
 const MAX_WIDTH     = 520
 const DEFAULT_WIDTH = 288
 
+function sourceIcon(kind, filename) {
+    if (kind === 'remote') return <IoGlobeOutline className="text-blue-500 dark:text-blue-400" />
+    const ext = filename?.split('.').pop()?.toLowerCase()
+    const icons = {
+        csv:     <TbFileTypeCsv     className="text-green-600 dark:text-green-400" />,
+        tsv:     <FaRegFileAlt      className="text-gray-500 dark:text-gray-400" />,
+        json:    <BsFiletypeJson    className="text-yellow-600 dark:text-yellow-400" />,
+        ndjson:  <LuFileJson        className="text-yellow-600 dark:text-yellow-400" />,
+        parquet: <SiApacheparquet   className="text-purple-600 dark:text-purple-400" />,
+        arrow:   <TbFileArrowRight  className="text-orange-500 dark:text-orange-400" />,
+        xlsx:    <BsFiletypeXlsx    className="text-emerald-600 dark:text-emerald-400" />,
+        xls:     <BsFiletypeXlsx    className="text-emerald-600 dark:text-emerald-400" />,
+        db:      <TbFileDatabase    className="text-blue-600 dark:text-blue-400" />,
+    }
+    return icons[ext] ?? <FaRegFolderOpen className="text-gray-500 dark:text-gray-400" />
+}
+
+function DataSourcesSection() {
+    const [sources,    setSources]    = useState([])
+    const [deletingNs, setDeletingNs] = useState(null)
+
+    function fetchSources() {
+        fetch('/sources')
+            .then(r => r.ok ? r.json() : { sources: [] })
+            .then(data => {
+                // backend returns { sources: [...] }
+                const list = Array.isArray(data) ? data : (data.sources ?? [])
+                setSources(list)
+            })
+            .catch(() => setSources([]))
+    }
+
+    useEffect(() => { fetchSources() }, [])
+
+    useEffect(() => {
+        const handler = () => fetchSources()
+        window.addEventListener('namespace-added', handler)
+        return () => window.removeEventListener('namespace-added', handler)
+    }, [])
+
+    async function handleDelete(namespace, e) {
+        e.stopPropagation()
+        if (!window.confirm(`Remove data source "${namespace}"?\nThis will delete the uploaded file.`)) return
+        setDeletingNs(namespace)
+        try {
+            const res = await fetch(`/sources/${namespace}`, { method: 'DELETE' })
+            if (res.ok) {
+                setSources(prev => prev.filter(s => s.namespace !== namespace))
+                window.dispatchEvent(new CustomEvent('namespace-added'))
+            } else {
+                alert('Failed to remove data source')
+            }
+        } catch {
+            alert('Could not reach backend')
+        } finally {
+            setDeletingNs(null)
+        }
+    }
+
+    return (
+        <div className="shrink-0 border-t border-gray-200 dark:border-gray-800">
+            <div className="px-3 pt-3 pb-1 flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                    Data Sources
+                </span>
+                <span className="text-xs tabular-nums text-gray-300 dark:text-gray-700">
+                    {sources.length > 0 ? sources.length : ''}
+                </span>
+            </div>
+            <div className="px-2 pb-2">
+                {sources.length === 0 ? (
+                    <p className="px-1 py-1 text-xs text-gray-400 dark:text-gray-600 italic">
+                        No data sources — use File → Add Data Source
+                    </p>
+                ) : (
+                    sources.map(src => (
+                        <div key={src.namespace} className="flex items-center gap-2 px-2 py-1.5 rounded-md mb-0.5 group border border-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none">
+                            <span className="text-sm shrink-0 leading-none">
+                                {sourceIcon(src.kind, src.filename ?? src.url)}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                                <span className="block text-xs font-mono truncate text-gray-700 dark:text-gray-300">
+                                    {src.namespace}
+                                </span>
+                                {(src.filename || src.url) && (
+                                    <span className="block text-xs truncate text-gray-400 dark:text-gray-600" title={src.filename ?? src.url}>
+                                        {src.filename ?? src.url}
+                                    </span>
+                                )}
+                            </div>
+                            <button
+                                onClick={e => handleDelete(src.namespace, e)}
+                                disabled={deletingNs === src.namespace}
+                                title={`Remove ${src.namespace}`}
+                                className="opacity-0 group-hover:opacity-100 shrink-0 w-4 h-4 flex items-center justify-center rounded text-xs text-gray-300 dark:text-gray-700 hover:text-red-400 dark:hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all disabled:opacity-30"
+                            >
+                                {deletingNs === src.namespace ? <BsThreeDots /> : <MdOutlineCancel />}
+                            </button>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div>
+    )
+}
+
 function Sidebar() {
     const { isOpen }   = useSidebarStore()
-    const { openEdit } = useConfigModalStore()
+    // const { openEdit } = useConfigModalStore()
+
+    const configStore = useConfigModalStore()
+    const openEdit = configStore.openEdit ?? configStore.open ?? (() => {})
 
     const [namespaces,   setNamespaces]   = useState([])
     const [selectedNs,   setSelectedNs]   = useState(null)
@@ -130,7 +244,7 @@ function Sidebar() {
                 "
             >
                 {/* Connections */}
-                <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-800">
+                <div className="shrink-0 border-b border-gray-200 dark:border-gray-800">
                     <div className="px-3 pt-3 pb-1 flex items-center justify-between">
                         <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-amber-50">
                             Connections
@@ -158,7 +272,7 @@ function Sidebar() {
                                     }
                                     `}
                                 >
-                                    <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                                         ns.healthy === false ? 'bg-red-400 animate-pulse' : 'bg-emerald-400'
                                     }`} />
                                     <span className={`text-xs font-mono flex-1 truncate ${
@@ -174,7 +288,7 @@ function Sidebar() {
                                         onClick={e => { e.stopPropagation(); handleEdit(ns.name) }}
                                         title={`Edit ${ns.name}`}
                                         className="
-                                            opacity-0 group-hover:opacity-100 flex-shrink-0
+                                            opacity-0 group-hover:opacity-100 shrink-0
                                             w-6 h-6 flex items-center justify-center rounded text-xs
                                             text-gray-500 dark:text-amber-50
                                             hover:text-blue-600 dark:hover:text-white
@@ -191,7 +305,7 @@ function Sidebar() {
                                         disabled={deletingNs === ns.name}
                                         title={`Disconnect ${ns.name}`}
                                         className="
-                                            opacity-0 group-hover:opacity-100 flex-shrink-0
+                                            opacity-0 group-hover:opacity-100 shrink-0
                                             w-6 h-6 flex items-center justify-center rounded text-xs
                                             text-gray-500 dark:text-amber-50
                                             hover:text-red-600 dark:hover:text-red-400
@@ -209,7 +323,7 @@ function Sidebar() {
 
                 {/*  Schema Explorer  */}
                 <div className="flex-1 flex flex-col overflow-hidden">
-                    <div className="flex-shrink-0 px-3 py-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+                    <div className="shrink-0 px-3 py-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
                         <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-amber-50">
                             Schema Explorer
                         </span>
@@ -223,6 +337,8 @@ function Sidebar() {
                         <SchemaExplorer activeNamespace={selectedNs} />
                     </div>
                 </div>
+                {/* Data Sources */}
+                <DataSourcesSection />
             </aside>
 
             {/* Drag handle */}

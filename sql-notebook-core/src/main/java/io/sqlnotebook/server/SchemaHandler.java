@@ -58,6 +58,12 @@ public class SchemaHandler extends HttpServlet {
             return;
         }
 
+        if (registry.isEphemeral(namespace)) {
+            resp.setStatus(404);
+            resp.getWriter().write("{\"error\":\"schema not available for file sources\"}");
+            return;
+        }
+
         try (Connection conn = registry.getConnection(namespace)) {
             String dbType = detectType(conn);
             List<Map<String, Object>> tables = fetchSchema(conn, dbType);
@@ -86,6 +92,8 @@ public class SchemaHandler extends HttpServlet {
             return fetchSqliteSchema(conn);
         } else if (dbType.contains("oracle")) {
             return fetchOracleSchema(conn);
+        } else if (dbType.contains("duckdb")) {
+            return fetchDuckDbSchema(conn);
         } else {
             return fetchInformationSchema(conn, dbType);
         }
@@ -350,6 +358,37 @@ public class SchemaHandler extends HttpServlet {
 
                     tableMap.computeIfAbsent(tableName, k -> new ArrayList<>()).add(column);
                 }
+            }
+        }
+
+        return buildTableList(tableMap);
+    }
+
+    // DuckDB — uses INFORMATION_SCHEMA but with 'main' schema and no FK support
+
+    private List<Map<String, Object>> fetchDuckDbSchema(Connection conn) throws Exception {
+        // DuckDB always uses 'main' as the default schema for file-based namespaces
+        String columnSql = """
+            SELECT table_name, column_name, data_type, ordinal_position
+            FROM information_schema.columns
+            WHERE table_schema = 'main'
+            ORDER BY table_name, ordinal_position
+        """;
+
+        Map<String, List<Map<String, Object>>> tableMap = new LinkedHashMap<>();
+        try (PreparedStatement ps = conn.prepareStatement(columnSql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                String tableName  = rs.getString("table_name");
+                String columnName = rs.getString("column_name");
+
+                Map<String, Object> column = new LinkedHashMap<>();
+                column.put("name",       columnName);
+                column.put("type",       rs.getString("data_type").toUpperCase());
+                column.put("primaryKey", false);
+                column.put("foreignKey", false);
+
+                tableMap.computeIfAbsent(tableName, k -> new ArrayList<>()).add(column);
             }
         }
 
