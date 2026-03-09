@@ -29,6 +29,8 @@ dependencies {
     implementation("org.xerial:sqlite-jdbc:3.51.2.0")
     // Source: https://mvnrepository.com/artifact/com.microsoft.sqlserver/mssql-jdbc
     implementation("com.microsoft.sqlserver:mssql-jdbc:13.2.1.jre11")
+    // Source: https://mvnrepository.com/artifact/org.duckdb/duckdb_jdbc
+    implementation("org.duckdb:duckdb_jdbc:1.4.4.0")
     // Source: https://mvnrepository.com/artifact/com.oracle.database.jdbc/ojdbc17
     implementation("com.oracle.database.jdbc:ojdbc17:23.26.1.0.0")
     // Source: https://mvnrepository.com/artifact/org.eclipse.jetty/jetty-server

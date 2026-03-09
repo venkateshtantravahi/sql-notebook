@@ -10,6 +10,8 @@ import KeyboardShortcutsModal from '../modal/KeyboardShortcutsModal.jsx'
 import AboutModal             from '../modal/AboutModal.jsx'
 import { GoGear } from "react-icons/go";
 import { HiOutlinePencilSquare } from "react-icons/hi2";
+import FileSourceModal from "../modal/FileSourceModal.jsx";
+import useFileSourceModalStore from "../../store/useFileSourceModalStore.js";
 
 // ----─ menu definitions --------------------------------------------------------------------------------
 
@@ -24,6 +26,8 @@ function buildMenus(actions) {
             { label: 'Rename',                              action: actions.rename         },
             { divider: true },
             { label: 'Export Notebook As...', action: actions.exportNotebook },
+            { divider: true },
+            { label: 'Add Data Source...', action: actions.addDataSource },
         ],
         View: [
             { label: 'Toggle Sidebar',   shortcut: '⌘B',   action: actions.toggleSidebar  },
@@ -190,6 +194,7 @@ function NotebookTitle({ onRename, editTriggerRef }) {
 function Header() {
     const { theme, toggleTheme }   = useThemeStore()
     const { open: openConfig }     = useConfigModalStore()
+    const { open: openFileSource } = useFileSourceModalStore()
     const { toggle: toggleSidebar } = useSidebarStore()
     const { zoomIn, zoomOut, reset: resetZoom } = useZoomStore()
     const { markSaved , newNotebook: newNb, setTitle } = useNotebookStore()
@@ -341,6 +346,7 @@ function Header() {
         saveAs:         handleSaveAs,
         rename:         () => titleEditRef.current?.(),
         exportNotebook: handleExportNotebook,
+        addDataSource:  openFileSource,
         toggleSidebar,
         toggleTheme,
         zoomIn,
@@ -430,6 +436,7 @@ function Header() {
                 isOpen={showAbout}
                 onClose={() => setShowAbout(false)}
             />
+            <FileSourceModal />
         </>
     )
 }

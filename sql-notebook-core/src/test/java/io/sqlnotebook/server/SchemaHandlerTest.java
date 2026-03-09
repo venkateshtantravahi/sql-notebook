@@ -2,6 +2,8 @@ package io.sqlnotebook.server;
 
 import io.sqlnotebook.config.ConnectionConfig;
 import io.sqlnotebook.connection.ConnectionRegistry;
+import io.sqlnotebook.duckdb.DuckDbRegistrar;
+import io.sqlnotebook.duckdb.FileSourceRegistry;
 import io.sqlnotebook.executor.QueryExecutor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -86,8 +88,10 @@ class SchemaHandlerTest {
         );
 
         ConnectionRegistry registry = new ConnectionRegistry(configs);
+        DuckDbRegistrar registrar = new DuckDbRegistrar(registry);
+        FileSourceRegistry sourceRegistry = new FileSourceRegistry(registrar);
         QueryExecutor executor = new QueryExecutor(registry);
-        server = new HttpServer(0, registry, executor);
+        server = new HttpServer(0, registry, executor, sourceRegistry, registrar);
         server.start();
         port = server.getPort();
 

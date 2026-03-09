@@ -30,6 +30,7 @@ export default defineConfig({
       '/connections': { target: 'http://localhost:8080', changeOrigin: true },
       '/system':      { target: 'http://localhost:8080', changeOrigin: true },
       '/files':       { target: 'http://localhost:8080', changeOrigin: true },
+      '/sources':     { target: 'http://localhost:8080', changeOrigin: true },
       '/ws': {
         target:      'ws://localhost:8080',
         ws:          true,

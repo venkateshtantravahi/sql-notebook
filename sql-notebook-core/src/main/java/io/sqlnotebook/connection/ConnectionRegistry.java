@@ -6,24 +6,36 @@ import io.sqlnotebook.config.ConnectionConfig;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Manages HikariCP connection pools indexed by namespace.
- * Thread-safe — supports hot-loading new connections at runtime
- * via register() without requiring an application restart.
+ * Manages a collection of HikariCP connection pools indexed by their namespace.
+ * This registry is responsible for initializing pools, providing active connections,
+ * and ensuring proper resource cleanup during shutdown.
+ *
+ * Thread safety:
+ *   pools and ephemeralNamespaces use ConcurrentHashMap so hot-add/remove
+ *   from FileSourceHandler and ConnectionHandler is safe under concurrent reads
+ *   from QueryExecutor (which holds connections for the duration of a query).
+ *
+ * Ephemeral namespaces:
+ *   File and remote data sources registered via DuckDbRegistrar are marked
+ *   ephemeral. This flag has one purpose: ConnectionHandler's DELETE endpoint
+ *   only writes back to sql.properties for non-ephemeral connections. Ephemeral
+ *   sources are managed entirely by FileSourceRegistry / sources.json.
  */
 public class ConnectionRegistry {
 
-    private final ConcurrentHashMap<String, HikariDataSource> pools = new ConcurrentHashMap<>();
-
+    private final Map<String, HikariDataSource> pools = new ConcurrentHashMap<>();
+    private final Set<String> ephemeralNamespaces = ConcurrentHashMap.newKeySet();
     /**
-     * Initialises the registry from a map of configs.
-     * Typically called at startup with configs parsed from sql.properties.
-     * Accepts an empty map — app starts fine with no connections.
+     * Initializes the registry by creating a connection pool for every provided configuration.
+     *
+     * @param configs A map of namespace-to-configuration objects.
      */
     public ConnectionRegistry(Map<String, ConnectionConfig> configs) {
         for (ConnectionConfig config : configs.values()) {
@@ -32,10 +44,12 @@ public class ConnectionRegistry {
     }
 
     /**
-     * Hot-loads a new connection pool for the given config at runtime.
-     * Called by ConnectionHandler after writing the config to sql.properties.
+     * Hot-register a new namespace without restarting the application.
+     * Used by ConnectionHandler (persistent connections) and
+     * DuckDbRegistrar (ephemeral file/remote sources).
      *
-     * @throws ConnectionRegistryException if namespace already exists.
+     * @param config    the connection configuration to register
+     * @throws ConnectionRegistryException if the namespace is already registered
      */
     public void register(ConnectionConfig config) {
         if (pools.containsKey(config.namespace())) {
@@ -47,23 +61,39 @@ public class ConnectionRegistry {
     }
 
     /**
-     * Closes and removes the pool for the given namespace.
-     * Called by ConnectionHandler after removing from sql.properties.
+     * Hot-register a new namespace, marking it as ephemeral.
+     * Ephemeral namespaces are managed by FileSourceRegistry and are not
+     * written to sql.properties when removed.
      *
-     * @throws ConnectionRegistryException if namespace is not found.
+     * @param config    the connection configuration to register
+     */
+    public void registerEphemeral(ConnectionConfig config) {
+        register(config);
+        ephemeralNamespaces.add(config.namespace());
+    }
+
+    /**
+     * Remove a namespace from the registry and close its connection pool.
+     * Safe to call concurrently — pool is closed after removal from the map.
+     *
+     * @param namespace the namespace to remove
+     * @throws ConnectionRegistryException if the namespace is not found
      */
     public void deregister(String namespace) {
         HikariDataSource pool = pools.remove(namespace);
         if (pool == null) {
             throw new ConnectionRegistryException("Unknown namespace: " + namespace);
         }
+        ephemeralNamespaces.remove(namespace);
         pool.close();
     }
 
     /**
-     * Returns a live JDBC connection from the named pool.
+     * Retrieves an active JDBC connection from the specified pool.
      *
-     * @throws ConnectionRegistryException if namespace unknown or pool fails.
+     * @param namespace The identifier for the desired database connection.
+     * @return A live {@link Connection} object.
+     * @throws ConnectionRegistryException if the namespace is unknown or the pool fails to provide a connection.
      */
     public Connection getConnection(String namespace) {
         HikariDataSource pool = pools.get(namespace);
@@ -80,18 +110,24 @@ public class ConnectionRegistry {
     }
 
     /**
-     * Returns a sorted snapshot of registered namespace names.
-     * Returns a copy — safe for concurrent modification.
+     * @return An unmodifiable view of all registered namespaces.
      */
     public Set<String> getNamespaces() {
-        return new TreeSet<>(pools.keySet());
+        return Collections.unmodifiableSet(pools.keySet());
     }
 
     /**
-     * Returns true if the namespace is currently registered.
+     * @return true if the namespace exists in this registry
      */
     public boolean hasNamespace(String namespace) {
         return pools.containsKey(namespace);
+    }
+
+    /**
+     * @return true if the namespace is ephemeral (file / remote source)
+     */
+    public boolean isEphemeral(String namespace) {
+        return ephemeralNamespaces.contains(namespace);
     }
 
     /**
@@ -112,6 +148,7 @@ public class ConnectionRegistry {
     public void shutdown() {
         pools.values().forEach(HikariDataSource::close);
         pools.clear();
+        ephemeralNamespaces.clear();
     }
 
     // ── private helpers ───────────────────────────────────────────────────────
@@ -131,6 +168,12 @@ public class ConnectionRegistry {
             hikari.setUsername(config.username());
             hikari.setPassword(config.password());
         }
+
+        if (!"duckdb".equals(config.type())) {
+            hikari.setUsername(config.username());
+            hikari.setPassword(config.password());
+        }
+
         return hikari;
     }
 
@@ -144,6 +187,8 @@ public class ConnectionRegistry {
                     "jdbc:oracle:thin:@//%s:%d/%s".formatted(config.host(), config.port(), config.database());
             case "sqlite" ->
                     "jdbc:sqlite:%s".formatted(config.database());
+            case "duckdb"   -> "jdbc:duckdb:%s"
+                    .formatted(config.database());
             case "microsoft-sql-server" ->
                     "jdbc:sqlserver://%s:%d;databaseName=%s;trustServerCertificate=true"
                             .formatted(config.host(), config.port(), config.database());
