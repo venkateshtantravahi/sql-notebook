@@ -33,11 +33,11 @@ dependencies {
     // Source: https://mvnrepository.com/artifact/com.oracle.database.jdbc/ojdbc17
     implementation("com.oracle.database.jdbc:ojdbc17:23.26.1.0.0")
     // Source: https://mvnrepository.com/artifact/org.eclipse.jetty/jetty-server
-    implementation("org.eclipse.jetty:jetty-server:12.1.5")
+    implementation("org.eclipse.jetty:jetty-server:12.1.6")
     // Source: https://mvnrepository.com/artifact/org.eclipse.jetty.ee10/jetty-ee10-servlet
-    implementation("org.eclipse.jetty.ee10:jetty-ee10-servlet:12.1.5")
+    implementation("org.eclipse.jetty.ee10:jetty-ee10-servlet:12.1.6")
     // Source: https://mvnrepository.com/artifact/org.eclipse.jetty.ee10.websocket/jetty-ee10-websocket-jakarta-server
-    implementation("org.eclipse.jetty.ee10.websocket:jetty-ee10-websocket-jakarta-server:12.1.5")
+    implementation("org.eclipse.jetty.ee10.websocket:jetty-ee10-websocket-jakarta-server:12.1.6")
     // Source: https://mvnrepository.com/artifact/tools.jackson.core/jackson-databind
     implementation("tools.jackson.core:jackson-databind:3.0.0")
     // Source: https://mvnrepository.com/artifact/jakarta.servlet/jakarta.servlet-api
@@ -58,7 +58,7 @@ dependencies {
     // Source: https://mvnrepository.com/artifact/org.testcontainers/oracle-free
     testImplementation("org.testcontainers:oracle-free:1.21.4")
     // Source: https://mvnrepository.com/artifact/org.eclipse.jetty.ee10.websocket/jetty-ee10-websocket-jakarta-client
-    testImplementation("org.eclipse.jetty.ee10.websocket:jetty-ee10-websocket-jakarta-client:12.1.5")
+    testImplementation("org.eclipse.jetty.ee10.websocket:jetty-ee10-websocket-jakarta-client:12.1.6")
 
     // logging
     // Source: https://mvnrepository.com/artifact/ch.qos.logback/logback-classic
