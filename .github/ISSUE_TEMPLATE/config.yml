@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Ask a Question
+    url: https://github.com/venkateshtantravahi/sql-notebook/discussions/categories/q-a
+    about: Use GitHub Discussions for questions and help
+  - name: 💡 Share an Idea
+    url: https://github.com/venkateshtantravahi/sql-notebook/discussions/categories/ideas
+    about: Suggest features or improvements in Discussions

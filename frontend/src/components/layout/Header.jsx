@@ -1,47 +1,48 @@
 import { useState, useEffect, useRef } from 'react'
-import useThemeStore        from '../../store/useThemeStore.js'
-import useConfigModalStore  from '../../store/useConfigModalStore.js'
-import useSidebarStore      from '../../store/useSidebarStore.js'
-import useZoomStore         from '../../store/useZoomStore.js'
-import useNotebookStore     from '../../store/useNotebookStore.js'
-import useCellStore         from '../../store/useCellStore.js'
-import {SqlNotebookMark} from "../common/SqlNotebookLogo.jsx";
+import useThemeStore from '../../store/useThemeStore.js'
+import useConfigModalStore from '../../store/useConfigModalStore.js'
+import useSidebarStore from '../../store/useSidebarStore.js'
+import useZoomStore from '../../store/useZoomStore.js'
+import useNotebookStore from '../../store/useNotebookStore.js'
+import useCellStore from '../../store/useCellStore.js'
+import { SqlNotebookMark } from '../common/SqlNotebookLogo.jsx'
 import KeyboardShortcutsModal from '../modal/KeyboardShortcutsModal.jsx'
-import AboutModal             from '../modal/AboutModal.jsx'
-import { GoGear } from "react-icons/go";
-import { HiOutlinePencilSquare } from "react-icons/hi2";
-import FileSourceModal from "../modal/FileSourceModal.jsx";
-import useFileSourceModalStore from "../../store/useFileSourceModalStore.js";
+import AboutModal from '../modal/AboutModal.jsx'
+import { GoGear } from 'react-icons/go'
+import { HiOutlinePencilSquare } from 'react-icons/hi2'
+import FileSourceModal from '../modal/FileSourceModal.jsx'
+import useFileSourceModalStore from '../../store/useFileSourceModalStore.js'
+import { MdDarkMode, MdLightMode } from 'react-icons/md'
 
 // ----─ menu definitions --------------------------------------------------------------------------------
 
 function buildMenus(actions) {
     return {
         File: [
-            { label: 'New Notebook',     shortcut: '⌘N',   action: actions.newNotebook    },
-            { label: 'Open Notebook...',  shortcut: '⌘O',   action: actions.openNotebook   },
+            { label: 'New Notebook', shortcut: '⌘N', action: actions.newNotebook },
+            { label: 'Open Notebook...', shortcut: '⌘O', action: actions.openNotebook },
             { divider: true },
-            { label: 'Save',             shortcut: '⌘S',   action: actions.save           },
-            { label: 'Save As...',       shortcut: '⌘⇧S',  action: actions.saveAs         },
-            { label: 'Rename',                              action: actions.rename         },
+            { label: 'Save', shortcut: '⌘S', action: actions.save },
+            { label: 'Save As...', shortcut: '⌘⇧S', action: actions.saveAs },
+            { label: 'Rename', action: actions.rename },
             { divider: true },
             { label: 'Export Notebook As...', action: actions.exportNotebook },
             { divider: true },
             { label: 'Add Data Source...', action: actions.addDataSource },
         ],
         View: [
-            { label: 'Toggle Sidebar',   shortcut: '⌘B',   action: actions.toggleSidebar  },
-            { label: 'Toggle Theme',     shortcut: '⌘⇧T',  action: actions.toggleTheme    },
+            { label: 'Toggle Sidebar', shortcut: '⌘B', action: actions.toggleSidebar },
+            { label: 'Toggle Theme', shortcut: '⌘⇧T', action: actions.toggleTheme },
             { divider: true },
-            { label: 'Zoom In',          shortcut: '⌘+',   action: actions.zoomIn         },
-            { label: 'Zoom Out',         shortcut: '⌘−',   action: actions.zoomOut        },
-            { label: 'Reset Zoom',       shortcut: '⌘0',   action: actions.resetZoom      },
+            { label: 'Zoom In', shortcut: '⌘+', action: actions.zoomIn },
+            { label: 'Zoom Out', shortcut: '⌘−', action: actions.zoomOut },
+            { label: 'Reset Zoom', shortcut: '⌘0', action: actions.resetZoom },
         ],
         Help: [
-            { label: 'Documentation',                       action: actions.docs           },
-            { label: 'Keyboard Shortcuts', shortcut: '⌘/', action: actions.shortcuts      },
+            { label: 'Documentation', action: actions.docs },
+            { label: 'Keyboard Shortcuts', shortcut: '⌘/', action: actions.shortcuts },
             { divider: true },
-            { label: 'About sql-notebook',                  action: actions.about          },
+            { label: 'About sql-notebook', action: actions.about },
         ],
     }
 }
@@ -66,31 +67,40 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
                 onClick={onToggle}
                 className={`
           text-xs px-3 py-1.5 rounded transition-colors
-          ${open
-                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-amber-50'
-                    : 'text-gray-500 dark:text-amber-50 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-800' +
+          ${
+              open
+                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-amber-50'
+                  : 'text-gray-500 dark:text-amber-50 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-800' +
                     ' dark:hover:text-gray-100'
-                }
+          }
         `}
             >
                 {label}
             </button>
 
             {open && (
-                <div className="
+                <div
+                    className="
           absolute top-full left-0 mt-1 z-50
           min-w-52 py-1 rounded-md shadow-lg
           bg-white dark:bg-gray-800
           border border-gray-200 dark:border-gray-700
-        ">
+        "
+                >
                     {items.map((item, i) =>
-                            item.divider ? (
-                                <div key={i} className="my-1 border-t border-gray-100 dark:border-gray-700" />
-                            ) : (
-                                <button
-                                    key={item.label}
-                                    onClick={() => { item.action?.(); onClose() }}
-                                    className="
+                        item.divider ? (
+                            <div
+                                key={i}
+                                className="my-1 border-t border-gray-100 dark:border-gray-700"
+                            />
+                        ) : (
+                            <button
+                                key={item.label}
+                                onClick={() => {
+                                    item.action?.()
+                                    onClose()
+                                }}
+                                className="
                   w-full flex items-center justify-between
                   px-3 py-1.5 text-xs
                   text-gray-700 dark:text-amber-50
@@ -98,15 +108,15 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
                   hover:text-gray-900 dark:hover:text-gray-100
                   transition-colors
                 "
-                                >
-                                    <span>{item.label}</span>
-                                    {item.shortcut && (
-                                        <span className="ml-6 text-gray-400 dark:text-gray-50 font-mono">
-                    {item.shortcut}
-                  </span>
-                                    )}
-                                </button>
-                            )
+                            >
+                                <span>{item.label}</span>
+                                {item.shortcut && (
+                                    <span className="ml-6 text-gray-400 dark:text-gray-50 font-mono">
+                                        {item.shortcut}
+                                    </span>
+                                )}
+                            </button>
+                        )
                     )}
                 </div>
             )}
@@ -119,7 +129,7 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
 function NotebookTitle({ onRename, editTriggerRef }) {
     const { title, isDirty, setTitle } = useNotebookStore()
     const [editing, setEditing] = useState(false)
-    const [draft,   setDraft  ] = useState(title)
+    const [draft, setDraft] = useState(title)
     const inputRef = useRef(null)
 
     useEffect(() => {
@@ -140,7 +150,7 @@ function NotebookTitle({ onRename, editTriggerRef }) {
     }
 
     function handleKeyDown(e) {
-        if (e.key === 'Enter')  commit()
+        if (e.key === 'Enter') commit()
         if (e.key === 'Escape') setEditing(false)
     }
 
@@ -149,7 +159,7 @@ function NotebookTitle({ onRename, editTriggerRef }) {
             <input
                 ref={inputRef}
                 value={draft}
-                onChange={e => setDraft(e.target.value)}
+                onChange={(e) => setDraft(e.target.value)}
                 onBlur={commit}
                 onKeyDown={handleKeyDown}
                 className="
@@ -176,15 +186,20 @@ function NotebookTitle({ onRename, editTriggerRef }) {
         >
             <span>{title}</span>
             {isDirty && (
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" title="Unsaved changes" />
+                <span
+                    className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"
+                    title="Unsaved changes"
+                />
             )}
-            <span className="
+            <span
+                className="
         text-gray-300 dark:text-white
         group-hover:text-gray-400 dark:group-hover:text-gray-500
         text-xs transition-colors
-      ">
-        <HiOutlinePencilSquare />
-      </span>
+      "
+            >
+                <HiOutlinePencilSquare className="text-gray-400 dark:text-white group-hover:text-gray-500 dark:group-hover:text-gray-400" />
+            </span>
         </button>
     )
 }
@@ -192,18 +207,18 @@ function NotebookTitle({ onRename, editTriggerRef }) {
 //  main header --------------------------------------------------------------------------------
 
 function Header() {
-    const { theme, toggleTheme }   = useThemeStore()
-    const { open: openConfig }     = useConfigModalStore()
+    const { theme, toggleTheme } = useThemeStore()
+    const { open: openConfig } = useConfigModalStore()
     const { open: openFileSource } = useFileSourceModalStore()
     const { toggle: toggleSidebar } = useSidebarStore()
     const { zoomIn, zoomOut, reset: resetZoom } = useZoomStore()
-    const { markSaved , newNotebook: newNb, setTitle } = useNotebookStore()
+    const { markSaved, newNotebook: newNb, setTitle } = useNotebookStore()
     const { getSnapshot, loadSnapshot, clearCells } = useCellStore()
     const titleEditRef = useRef(null)
 
-    const [openMenu,       setOpenMenu      ] = useState(null)
-    const [showShortcuts,  setShowShortcuts ] = useState(false)
-    const [showAbout,      setShowAbout     ] = useState(false)
+    const [openMenu, setOpenMenu] = useState(null)
+    const [showShortcuts, setShowShortcuts] = useState(false)
+    const [showAbout, setShowAbout] = useState(false)
 
     // global keyboard shortcuts --------------------------------------------------------------------------------
     useEffect(() => {
@@ -211,13 +226,34 @@ function Header() {
             const mod = e.metaKey || e.ctrlKey
             if (!mod) return
 
-            if (e.key === 'b') { e.preventDefault(); toggleSidebar() }
-            if (e.key === 's' && !e.shiftKey) { e.preventDefault(); handleSave() }
-            if (e.key === '=') { e.preventDefault(); zoomIn()   }
-            if (e.key === '-') { e.preventDefault(); zoomOut()  }
-            if (e.key === '0') { e.preventDefault(); resetZoom()}
-            if (e.key === '/') { e.preventDefault(); setShowShortcuts(true) }
-            if (e.key === 'n') { e.preventDefault(); handleNew() }
+            if (e.key === 'b') {
+                e.preventDefault()
+                toggleSidebar()
+            }
+            if (e.key === 's' && !e.shiftKey) {
+                e.preventDefault()
+                handleSave()
+            }
+            if (e.key === '=') {
+                e.preventDefault()
+                zoomIn()
+            }
+            if (e.key === '-') {
+                e.preventDefault()
+                zoomOut()
+            }
+            if (e.key === '0') {
+                e.preventDefault()
+                resetZoom()
+            }
+            if (e.key === '/') {
+                e.preventDefault()
+                setShowShortcuts(true)
+            }
+            if (e.key === 'n') {
+                e.preventDefault()
+                handleNew()
+            }
         }
         document.addEventListener('keydown', handle)
         return () => document.removeEventListener('keydown', handle)
@@ -233,10 +269,10 @@ function Header() {
 
     function buildSqlnb(title, cellSnapshots) {
         return {
-            version:   '1',
+            version: '1',
             title,
-            savedAt:   new Date().toISOString(),
-            cells:     cellSnapshots,
+            savedAt: new Date().toISOString(),
+            cells: cellSnapshots,
         }
     }
 
@@ -254,10 +290,12 @@ function Header() {
                 // First save — show save dialog
                 fileHandleRef.current = await window.showSaveFilePicker({
                     suggestedName: `${title.replace(/\s+/g, '-')}.sqlnb`,
-                    types: [{
-                        description: 'SQL Notebook',
-                        accept: { 'application/x-sqlnotebook': ['.sqlnb'] },
-                    }],
+                    types: [
+                        {
+                            description: 'SQL Notebook',
+                            accept: { 'application/x-sqlnotebook': ['.sqlnb'] },
+                        },
+                    ],
                 })
             }
             await writeSqlnbFile(fileHandleRef.current, data)
@@ -275,10 +313,12 @@ function Header() {
         try {
             const handle = await window.showSaveFilePicker({
                 suggestedName: `${title.replace(/\s+/g, '-')}.sqlnb`,
-                types: [{
-                    description: 'SQL Notebook',
-                    accept: { 'application/x-sqlnotebook': ['.sqlnb'] },
-                }],
+                types: [
+                    {
+                        description: 'SQL Notebook',
+                        accept: { 'application/x-sqlnotebook': ['.sqlnb'] },
+                    },
+                ],
             })
             fileHandleRef.current = handle
             await writeSqlnbFile(handle, data)
@@ -299,10 +339,12 @@ function Header() {
     async function handleOpen() {
         try {
             const [handle] = await window.showOpenFilePicker({
-                types: [{
-                    description: 'SQL Notebook',
-                    accept: {'application/x-sqlnotebook': ['.sqlnb']},
-                }],
+                types: [
+                    {
+                        description: 'SQL Notebook',
+                        accept: { 'application/x-sqlnotebook': ['.sqlnb'] },
+                    },
+                ],
             })
             const file = await handle.getFile()
             const text = await file.text()
@@ -326,10 +368,12 @@ function Header() {
         try {
             const handle = await window.showSaveFilePicker({
                 suggestedName: `${title.replace(/\s+/g, '-')}.sqlnb`,
-                types: [{
-                    description: 'SQL Notebook',
-                    accept: { 'application/x-sqlnotebook': ['.sqlnb'] },
-                }],
+                types: [
+                    {
+                        description: 'SQL Notebook',
+                        accept: { 'application/x-sqlnotebook': ['.sqlnb'] },
+                    },
+                ],
             })
             await writeSqlnbFile(handle, data)
         } catch (err) {
@@ -340,35 +384,37 @@ function Header() {
     // ---- menu definitions with wired actions ----------------------------------------
 
     const MENUS = buildMenus({
-        newNotebook:    handleNew,
-        openNotebook:   handleOpen,
-        save:           handleSave,
-        saveAs:         handleSaveAs,
-        rename:         () => titleEditRef.current?.(),
+        newNotebook: handleNew,
+        openNotebook: handleOpen,
+        save: handleSave,
+        saveAs: handleSaveAs,
+        rename: () => titleEditRef.current?.(),
         exportNotebook: handleExportNotebook,
-        addDataSource:  openFileSource,
+        addDataSource: openFileSource,
         toggleSidebar,
         toggleTheme,
         zoomIn,
         zoomOut,
         resetZoom,
-        docs:           () => window.open('https://github.com/venkateshtantravahi/sql-notebook', '_blank'),
-        shortcuts:      () => setShowShortcuts(true),
-        about:          () => setShowAbout(true),
+        docs: () => window.open('https://github.com/venkateshtantravahi/sql-notebook', '_blank'),
+        shortcuts: () => setShowShortcuts(true),
+        about: () => setShowAbout(true),
     })
 
     function toggle(label) {
-        setOpenMenu(prev => prev === label ? null : label)
+        setOpenMenu((prev) => (prev === label ? null : label))
     }
 
     return (
         <>
-            <header className="
+            <header
+                className="
         fixed top-0 left-0 right-0 z-50 h-12
         flex items-center justify-between px-4
         bg-white dark:bg-gray-900
         border-b border-gray-200 dark:border-gray-800
-      ">
+      "
+            >
                 {/* Left — logo + app name */}
                 <div className="flex items-center gap-2 w-40">
                     {/*<div className="w-5 h-5 rounded bg-blue-600 flex items-center justify-center flex-shrink-0">*/}
@@ -376,14 +422,16 @@ function Header() {
                     {/*</div>*/}
                     <SqlNotebookMark size={28} dark={theme === 'dark'} />
                     <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 tracking-wide whitespace-nowrap">
-            sql-notebook
-          </span>
+                        sql-notebook
+                    </span>
                 </div>
 
                 {/* Center — notebook title inline with menus */}
                 <div className="flex items-center gap-1">
                     <NotebookTitle
-                        onRename={() => { fileHandleRef.current = null }}
+                        onRename={() => {
+                            fileHandleRef.current = null
+                        }}
                         editTriggerRef={titleEditRef}
                     />
                     <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
@@ -400,7 +448,7 @@ function Header() {
                 </div>
 
                 {/* Right — theme toggle + config */}
-                <div className="flex items-center gap-2 w-40 justify-end">
+                <div className="flex items-center gap-2 w-50 justify-end">
                     <button
                         onClick={toggleTheme}
                         className="
@@ -410,7 +458,19 @@ function Header() {
               hover:text-gray-700 dark:hover:text-gray-200
             "
                     >
-                        {theme === 'dark' ? '☀Light' : '☾ Dark'}
+                        <span className="flex items-center gap-1">
+                            {theme === 'dark' ? (
+                                <>
+                                    <MdLightMode className="text-yellow-400" />
+                                    <span>Light</span>
+                                </>
+                            ) : (
+                                <>
+                                    <MdDarkMode className="text-gray-400 dark:text-gray-300" />
+                                    <span>Dark</span>
+                                </>
+                            )}
+                        </span>
                     </button>
 
                     <button
@@ -422,7 +482,7 @@ function Header() {
               flex items-center gap-1.5
             "
                     >
-                        <span><GoGear /></span>
+                        <GoGear className="text-white" />
                         <span>Config</span>
                     </button>
                 </div>
@@ -432,10 +492,7 @@ function Header() {
                 isOpen={showShortcuts}
                 onClose={() => setShowShortcuts(false)}
             />
-            <AboutModal
-                isOpen={showAbout}
-                onClose={() => setShowAbout(false)}
-            />
+            <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />
             <FileSourceModal />
         </>
     )

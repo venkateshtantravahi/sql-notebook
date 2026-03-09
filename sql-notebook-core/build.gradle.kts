@@ -16,6 +16,12 @@ repositories {
     mavenCentral()
 }
 
+configurations.all {
+    resolutionStrategy {
+        force("org.apache.commons:commons-compress:1.26.1")
+    }
+}
+
 dependencies {
     // This dependency is used by the application.
     implementation(libs.guava)
@@ -34,13 +40,13 @@ dependencies {
     // Source: https://mvnrepository.com/artifact/com.oracle.database.jdbc/ojdbc17
     implementation("com.oracle.database.jdbc:ojdbc17:23.26.1.0.0")
     // Source: https://mvnrepository.com/artifact/org.eclipse.jetty/jetty-server
-    implementation("org.eclipse.jetty:jetty-server:12.1.5")
+    implementation("org.eclipse.jetty:jetty-server:12.1.6")
     // Source: https://mvnrepository.com/artifact/org.eclipse.jetty.ee10/jetty-ee10-servlet
-    implementation("org.eclipse.jetty.ee10:jetty-ee10-servlet:12.1.5")
+    implementation("org.eclipse.jetty.ee10:jetty-ee10-servlet:12.1.6")
     // Source: https://mvnrepository.com/artifact/org.eclipse.jetty.ee10.websocket/jetty-ee10-websocket-jakarta-server
-    implementation("org.eclipse.jetty.ee10.websocket:jetty-ee10-websocket-jakarta-server:12.1.5")
+    implementation("org.eclipse.jetty.ee10.websocket:jetty-ee10-websocket-jakarta-server:12.1.6")
     // Source: https://mvnrepository.com/artifact/tools.jackson.core/jackson-databind
-    implementation("tools.jackson.core:jackson-databind:3.0.0")
+    implementation("tools.jackson.core:jackson-databind:3.1.0")
     // Source: https://mvnrepository.com/artifact/jakarta.servlet/jakarta.servlet-api
     implementation("jakarta.servlet:jakarta.servlet-api:6.0.0")
     // Source: https://mvnrepository.com/artifact/jakarta.websocket/jakarta.websocket-api
@@ -49,7 +55,7 @@ dependencies {
     implementation("org.eclipse.jetty.toolchain:jetty-jakarta-servlet-api:5.0.2")
 
     // Source: https://mvnrepository.com/artifact/org.testcontainers/junit-jupiter
-    testImplementation("org.testcontainers:junit-jupiter:1.21.4")
+    testImplementation("org.testcontainers:junit-jupiter:1.21.0")
     // Source: https://mvnrepository.com/artifact/org.testcontainers/mysql
     testImplementation("org.testcontainers:mysql:1.21.4")
     // Source: https://mvnrepository.com/artifact/org.testcontainers/postgresql
@@ -59,7 +65,7 @@ dependencies {
     // Source: https://mvnrepository.com/artifact/org.testcontainers/oracle-free
     testImplementation("org.testcontainers:oracle-free:1.21.4")
     // Source: https://mvnrepository.com/artifact/org.eclipse.jetty.ee10.websocket/jetty-ee10-websocket-jakarta-client
-    testImplementation("org.eclipse.jetty.ee10.websocket:jetty-ee10-websocket-jakarta-client:12.1.5")
+    testImplementation("org.eclipse.jetty.ee10.websocket:jetty-ee10-websocket-jakarta-client:12.1.6")
 
     // logging
     // Source: https://mvnrepository.com/artifact/ch.qos.logback/logback-classic
@@ -69,9 +75,8 @@ dependencies {
 testing {
     suites {
         // Configure the built-in test suite
-        val test by getting(JvmTestSuite::class) {
-            // Use JUnit Jupiter test framework
-            useJUnitJupiter("5.12.1")
+        named<JvmTestSuite>("test") {
+            useJUnitJupiter()
         }
     }
 }

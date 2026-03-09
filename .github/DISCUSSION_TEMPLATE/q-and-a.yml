@@ -1,0 +1,27 @@
+title: ''
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ❓ Ask a Question
+        Before asking, please check existing discussions and the README.
+  - type: textarea
+    attributes:
+      label: What's your question?
+      description: Be as specific as possible
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: What have you already tried?
+      description: Steps you've taken to resolve this yourself
+  - type: dropdown
+    attributes:
+      label: Connection type
+      options:
+        - PostgreSQL
+        - SQLite
+        - DuckDB file source
+        - Remote source
+        - Other

@@ -1,0 +1,24 @@
+title: ''
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 💡 Share your idea
+        Got a feature idea or improvement? Share it here before opening a formal issue.
+  - type: textarea
+    attributes:
+      label: What's your idea?
+      description: Describe the feature or improvement you'd like to see
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Why would this be useful?
+      description: What problem does it solve?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Any examples or references?
+      description: Links, screenshots, or similar tools you've seen

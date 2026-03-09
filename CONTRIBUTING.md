@@ -52,13 +52,13 @@ main          ← always stable, always tagged
 
 Branch names are enforced by CI. Use one of these prefixes:
 
-| Prefix | Use for |
-|---|---|
-| `feat/` | New feature |
-| `fix/` | Bug fix |
-| `docs/` | Documentation only |
-| `test/` | Adding or fixing tests |
-| `chore/` | Build, CI, tooling changes |
+| Prefix      | Use for                                     |
+|-------------|---------------------------------------------|
+| `feat/`     | New feature                                 |
+| `fix/`      | Bug fix                                     |
+| `docs/`     | Documentation only                          |
+| `test/`     | Adding or fixing tests                      |
+| `chore/`    | Build, CI, tooling changes                  |
 | `refactor/` | Code restructuring without behaviour change |
 
 **Examples:**
@@ -136,13 +136,13 @@ fix(scope): description
 
 ## Module Overview
 
-| Module | Package | What it does |
-|---|---|---|
-| Config Parser | `io.sqlnotebook.config` | Parses `sql.properties` into typed config objects |
-| Connection Registry | `io.sqlnotebook.connection` | Creates and manages one HikariCP pool per namespace |
-| Query Executor | `io.sqlnotebook.executor` | Submits SQL to a thread pool, returns `Future<QueryResult>` |
-| HTTP Server | `io.sqlnotebook.server` | Embedded Jetty with REST endpoints |
-| WebSocket | `io.sqlnotebook.server` | Live query execution updates over WebSocket |
+| Module              | Package                     | What it does                                                |
+|---------------------|-----------------------------|-------------------------------------------------------------|
+| Config Parser       | `io.sqlnotebook.config`     | Parses `sql.properties` into typed config objects           |
+| Connection Registry | `io.sqlnotebook.connection` | Creates and manages one HikariCP pool per namespace         |
+| Query Executor      | `io.sqlnotebook.executor`   | Submits SQL to a thread pool, returns `Future<QueryResult>` |
+| HTTP Server         | `io.sqlnotebook.server`     | Embedded Jetty with REST endpoints                          |
+| WebSocket           | `io.sqlnotebook.server`     | Live query execution updates over WebSocket                 |
 
 See [docs/developer-guide.adoc](docs/developer-guide.adoc) for how these modules connect end to end.
 

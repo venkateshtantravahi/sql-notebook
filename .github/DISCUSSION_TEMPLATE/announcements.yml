@@ -1,0 +1,14 @@
+title: ''
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 📣 Announcement
+        Use this template for release notes, major updates, and project news.
+  - type: textarea
+    attributes:
+      label: What's new?
+      description: Describe the announcement
+    validations:
+      required: true

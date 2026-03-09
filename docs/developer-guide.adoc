@@ -16,7 +16,8 @@ For per-module API detail, see the individual module docs in the `docs/` directo
 
 Every request that reaches the browser travels through the following chain:
 
-```
+[source]
+----
 sql.properties
       │
       ▼
@@ -34,7 +35,7 @@ sql.properties
       ├── GET  /namespaces       → NamespaceHandler  → ConnectionRegistry.getNamespaces()
       ├── POST /query            → QueryHandler      → QueryExecutor.execute()
       └── WS   /ws/query        → QueryWebSocket    → QueryExecutor.execute()
-```
+----
 
 No module knows about the ones above it in the chain. `QueryExecutor` does not know about Jetty. `ConnectionRegistry` does not know about `QueryExecutor`. Each module depends only downward.
 
