@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import cellToolbar from "../components/cell/CellToolbar.jsx";
 
 // Draft payload shape sent to POST /draft
 // {
@@ -20,7 +19,7 @@ async function postDraft(title, cellSnapshots) {
     try {
         const res = await fetch('/draft', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         })
         if (!res.ok) {
@@ -36,17 +35,17 @@ const useNotebookStore = create((set, get) => ({
     savedAt: null,
     isDirty: false,
 
-    setTitle: (title) => set({ title, isDirty: true}),
+    setTitle: (title) => set({ title, isDirty: true }),
 
     // Called after a successful explicit file save
     // Marks the notebook clean and records the save timestamp
     markSaved: () => {
-        set({ savedAt: new Date().toISOString(), isDirty: false})
+        set({ savedAt: new Date().toISOString(), isDirty: false })
     },
 
     // called by autosave subscriber in App.jsx with the current cell snapshot.
     // Posts to backed fire and forget, errors are logged not thrown.
-    saveDraft:(cellSnapshots) => {
+    saveDraft: (cellSnapshots) => {
         const { title } = get()
         postDraft(title, cellSnapshots)
         // Mark dirty = false only after successful write would be ideal but since
