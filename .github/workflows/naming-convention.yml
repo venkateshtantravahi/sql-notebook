@@ -1,31 +1,45 @@
-name: naming-convention.yml
+name: naming-convention
+
 on:
   pull_request:
-    types: [ opened, assigned, synchronize ]
+    branches: [ main, dev ]
+    types: [ opened, synchronize, reopened, edited ]
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   check-branch-name:
+    name: Check branch name
     runs-on: ubuntu-latest
+
     steps:
-      - name: Check branch naming
+      - name: Check branch name
         run: |
           BRANCH="${{ github.head_ref }}"
-          PATTERN="^(feat|fix|docs|chore|test|refactor)/.+"
+          PATTERN="^(feat|fix|docs|test|chore|refactor)/[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
           if [[ ! "$BRANCH" =~ $PATTERN ]]; then
-            echo "Branch '$BRANCH' must follow: feat/*, fix/*, docs/*, chore/*, test/*, refactor/*"
+            echo "Branch name '$BRANCH' is invalid."
+            echo "Must follow: feat/my-feature, fix/bug-name, chore/task-name"
+            echo "Allowed prefixes: feat, fix, docs, test, chore, refactor"
             exit 1
           fi
-          echo "Branch name is valid"
+          echo "Branch name is valid: $BRANCH"
 
   check-pr-title:
+    name: Check PR title
     runs-on: ubuntu-latest
+
     steps:
       - name: Check PR title
         run: |
           TITLE="${{ github.event.pull_request.title }}"
-          PATTERN="^(feat|fix|docs|chore|test|refactor)(\(.+\))?: .+"
+          PATTERN="^(feat|fix|docs|test|chore|refactor|style|perf|ci|revert)(\(.+\))?: .+"
           if [[ ! "$TITLE" =~ $PATTERN ]]; then
-            echo "PR title '$TITLE' must follow: feat: description  or  feat(scope): description"
+            echo "PR title '$TITLE' is invalid."
+            echo "Must follow: feat: description  or  feat(scope): description"
+            echo "Allowed types: feat, fix, docs, test, chore, refactor, style, perf, ci, revert"
             exit 1
           fi
-          echo "PR title is valid"
+          echo "PR title is valid: $TITLE"

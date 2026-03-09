@@ -1,0 +1,26 @@
+#!/bin/sh
+# Validate commit message follows Conventional Commits format:
+# <type>(<scope>): <description>
+# Types: feat, fix, docs, test, chore, refactor, style, perf, ci, revert
+
+commit_msg=$(cat "$1")
+
+# Strip comments (lines starting with #)
+stripped=$(echo "$commit_msg" | sed '/^#/d' | sed '/^$/d')
+
+pattern='^(feat|fix|docs|test|chore|refactor|style|perf|ci|revert)(\([a-z0-9/-]+\))?: .{1,72}$'
+
+if ! echo "$stripped" | head -1 | grep -qE "$pattern"; then
+  echo ""
+  echo "  Commit message does not follow Conventional Commits format."
+  echo ""
+  echo "  Expected:  <type>(<scope>): <description>"
+  echo "  Example:   feat(server): add WebSocket endpoint"
+  echo ""
+  echo "  Allowed types: feat, fix, docs, test, chore, refactor, style, perf, ci, revert"
+  echo "  Subject line must be 72 characters or fewer."
+  echo ""
+  echo "  Your message: $stripped"
+  echo ""
+  exit 1
+fi

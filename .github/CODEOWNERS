@@ -1,0 +1,32 @@
+# ==============================================================================
+# CODEOWNERS — sql-notebook
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Order matters: the LAST matching pattern takes precedence.
+# All listed owners must have write access to the repository.
+# ==============================================================================
+
+# Global fallback — @venkateshtantravahi reviews everything not matched below
+*                                   @venkateshtantravahi
+
+#  Backend
+/sql-notebook-core/                 @venkateshtantravahi
+
+#  Frontend
+/frontend/                          @venkateshtantravahi
+
+#  Build & dependency files
+/build.gradle                       @venkateshtantravahi
+/settings.gradle                    @venkateshtantravahi
+/gradle/                            @venkateshtantravahi
+/frontend/package.json              @venkateshtantravahi
+/frontend/package-lock.json         @venkateshtantravahi
+
+#  Docker & deployment
+/Dockerfile                         @venkateshtantravahi
+/docker-compose*.yml                @venkateshtantravahi
+
+#  CI/CD & repo config
+# This protects the CODEOWNERS file itself and all GitHub config —
+# the most critical files per GitHub docs recommendation
+/.github/                           @venkateshtantravahi

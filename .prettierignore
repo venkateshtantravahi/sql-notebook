@@ -1,0 +1,23 @@
+# Build output
+dist/
+build/
+out/
+
+# Gradle
+.gradle/
+sql-notebook-core/build/
+
+# Frontend generated static resources (copied by Gradle build)
+sql-notebook-core/src/main/resources/static/
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Lock files — formatting these causes unnecessary diffs
+package-lock.json
+frontend/package-lock.json
+
+# Misc
+*.min.js
+*.min.css

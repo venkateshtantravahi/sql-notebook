@@ -1,25 +1,29 @@
 import { useState, useEffect } from 'react'
+import { MdPlayArrow, MdClose, MdDownload } from 'react-icons/md'
+import { CgSpinner } from 'react-icons/cg'
 import useZoomStore from '../../store/useZoomStore.js'
 
 function exportCSV(results) {
     if (!results) return
     const header = results.columns.join(',')
-    const rows   = results.rows.map((row, _) =>
-        results.columns.map((col, colIdx) => {
-            const val = Array.isArray(row) ? row[colIdx] : row[col]
-            if (val === null || val === undefined) return ''
-            const str = String(val)
-            return str.includes(',') || str.includes('"') || str.includes('\n')
-                ? `"${str.replace(/"/g, '""')}"`
-                : str
-        }).join(',')
+    const rows = results.rows.map((row) =>
+        results.columns
+            .map((col, colIdx) => {
+                const val = Array.isArray(row) ? row[colIdx] : row[col]
+                if (val === null || val === undefined) return ''
+                const str = String(val)
+                return str.includes(',') || str.includes('"') || str.includes('\n')
+                    ? `"${str.replace(/"/g, '""')}"`
+                    : str
+            })
+            .join(',')
     )
     download([header, ...rows].join('\n'), 'results.csv', 'text/csv')
 }
 
 function exportJSON(results) {
     if (!results) return
-    const objects = results.rows.map(row =>
+    const objects = results.rows.map((row) =>
         Object.fromEntries(
             results.columns.map((col, i) => [col, Array.isArray(row) ? row[i] : row[col]])
         )
@@ -29,28 +33,28 @@ function exportJSON(results) {
 
 function download(content, filename, type) {
     const blob = URL.createObjectURL(new Blob([content], { type }))
-    const a    = Object.assign(document.createElement('a'), { href: blob, download: filename })
+    const a = Object.assign(document.createElement('a'), { href: blob, download: filename })
     a.click()
     URL.revokeObjectURL(blob)
 }
 
 function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
-    const { level }  = useZoomStore()
+    const { level } = useZoomStore()
     const [namespaces, setNamespaces] = useState([])
-    const isRunning  = cell.status === 'running'
+    const isRunning = cell.status === 'running'
     const hasResults = cell.status === 'done' && cell.results
 
     // Fetch live namespaces from backend
     useEffect(() => {
         fetch('/namespaces?all=true')
-            .then(r => r.ok ? r.json() : [])
-            .then(data => {
+            .then((r) => (r.ok ? r.json() : []))
+            .then((data) => {
                 if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
-                    setNamespaces(data.map(ns => ns.name))
+                    setNamespaces(data.map((ns) => ns.name))
                 } else {
                     setNamespaces(data)
                 }
-                })
+            })
             .catch(() => setNamespaces([]))
     }, [])
 
@@ -70,7 +74,7 @@ function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
                 id={`namespace-${cell.id}`}
                 name={`namespace-${cell.id}`}
                 value={cell.namespace ?? ''}
-                onChange={e => onNamespaceChange(e.target.value)}
+                onChange={(e) => onNamespaceChange(e.target.value)}
                 className="
           text-xs font-mono px-2 py-1 rounded
           bg-white dark:bg-gray-700
@@ -81,10 +85,14 @@ function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
         "
             >
                 <option value="" disabled>
-                    {namespaces.length === 0 ? 'No namespaces — click ⚙ Config' : 'Select namespace'}
+                    {namespaces.length === 0
+                        ? 'No namespaces — click ⚙ Config'
+                        : 'Select namespace'}
                 </option>
-                {namespaces.map(ns => (
-                    <option key={ns} value={ns}>{ns}</option>
+                {namespaces.map((ns) => (
+                    <option key={ns} value={ns}>
+                        {ns}
+                    </option>
                 ))}
             </select>
 
@@ -103,7 +111,7 @@ function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
               "
                             title="Export as CSV"
                         >
-                            ↓ CSV
+                            <MdDownload className="inline" /> CSV
                         </button>
                         <button
                             onClick={() => exportJSON(cell.results)}
@@ -116,7 +124,7 @@ function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
               "
                             title="Export as JSON"
                         >
-                            ↓ JSON
+                            <MdDownload className="inline" /> JSON
                         </button>
                     </div>
                 )}
@@ -132,10 +140,15 @@ function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
             text-white font-medium transition-colors
           "
                 >
-                    {isRunning
-                        ? <><span className="animate-spin inline-block">⟳</span> Running</>
-                        : <><span>▶</span> Run</>
-                    }
+                    {isRunning ? (
+                        <>
+                            <CgSpinner className="animate-spin text-white" /> Running
+                        </>
+                    ) : (
+                        <>
+                            <MdPlayArrow className="text-white" /> Run
+                        </>
+                    )}
                 </button>
 
                 <button
@@ -148,7 +161,7 @@ function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
             transition-colors
           "
                 >
-                    ✕
+                    <MdClose className="text-gray-400 dark:text-gray-500 hover:text-red-400 dark:hover:text-red-400" />
                 </button>
             </div>
         </div>

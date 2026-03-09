@@ -140,12 +140,17 @@ public class FileSourceRegistry {
 
         // Delete uploaded file for file sources
         if ("file".equals(entry.kind()) && entry.filename() != null) {
-            Path uploadedFile = Path.of(registrar.UPLOAD_DIR + entry.filename());
-            try {
-                Files.deleteIfExists(uploadedFile);
-                log.info("[sources] deleted uploaded file '{}'", uploadedFile);
-            } catch (IOException e) {
-                log.warn("[sources] could not delete file '{}': {}", uploadedFile, e.getMessage());
+            Path baseDir     = Path.of(registrar.UPLOAD_DIR).normalize().toAbsolutePath();
+            Path uploadedFile = baseDir.resolve(entry.filename()).normalize().toAbsolutePath();
+            if (!uploadedFile.startsWith(baseDir)) {
+                log.warn("[sources] path traversal blocked for filename '{}'", entry.filename());
+            } else {
+                try {
+                    Files.deleteIfExists(uploadedFile);
+                    log.info("[sources] deleted uploaded file '{}'", uploadedFile);
+                } catch (IOException e) {
+                    log.warn("[sources] could not delete file '{}': {}", uploadedFile, e.getMessage());
+                }
             }
         }
 
@@ -187,7 +192,7 @@ public class FileSourceRegistry {
                     rehydrateEntry(node);
                 } catch (Exception e) {
                     log.warn("[sources] failed to rehydrate entry '{}': {}",
-                            node.path("namespace").asText(), e.getMessage());
+                            node.path("namespace").asString(), e.getMessage());
                 }
             }
 
@@ -240,14 +245,19 @@ public class FileSourceRegistry {
      * Adds to in-memory list and re-registers with DuckDbRegistrar.
      */
     private void rehydrateEntry(JsonNode node) {
-        String kind      = node.path("kind").asText();
-        String namespace = node.path("namespace").asText();
-        String addedAt   = node.path("addedAt").asText();
+        String kind      = node.path("kind").asString();
+        String namespace = node.path("namespace").asString();
+        String addedAt   = node.path("addedAt").asString();
 
         if ("file".equals(kind)) {
-            String filename = node.path("filename").asText();
+            String filename = node.path("filename").asString();
             // Verify the upload file still exists
-            Path uploadPath = Path.of(registrar.UPLOAD_DIR + filename);
+            Path baseDir   = Path.of(registrar.UPLOAD_DIR).normalize().toAbsolutePath();
+            Path uploadPath = baseDir.resolve(filename).normalize().toAbsolutePath();
+            if (!uploadPath.startsWith(baseDir)) {
+                log.warn("[sources] path traversal blocked for filename '{}' — skipping", filename);
+                return;
+            }
             if (!Files.exists(uploadPath)) {
                 log.warn("[sources] upload file '{}' no longer exists — skipping", filename);
                 return;
@@ -259,11 +269,11 @@ public class FileSourceRegistry {
                     null, null, null, null, addedAt));
 
         } else if ("remote".equals(kind)) {
-            String url              = node.path("url").asText();
-            String s3Endpoint       = nullIfEmpty(node.path("s3Endpoint").asText(null));
-            String s3Region         = nullIfEmpty(node.path("s3Region").asText(null));
-            String s3AccessKeyId    = nullIfEmpty(node.path("s3AccessKeyId").asText(null));
-            String s3SecretKey      = nullIfEmpty(node.path("s3SecretAccessKey").asText(null));
+            String url              = node.path("url").asString();
+            String s3Endpoint       = nullIfEmpty(node.path("s3Endpoint").asString(null));
+            String s3Region         = nullIfEmpty(node.path("s3Region").asString(null));
+            String s3AccessKeyId    = nullIfEmpty(node.path("s3AccessKeyId").asString(null));
+            String s3SecretKey      = nullIfEmpty(node.path("s3SecretAccessKey").asString(null));
 
             DuckDbRegistrar.S3Config s3Config = (s3AccessKeyId != null)
                     ? new DuckDbRegistrar.S3Config(s3Endpoint, s3Region, s3AccessKeyId, s3SecretKey)

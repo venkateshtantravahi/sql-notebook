@@ -1,0 +1,30 @@
+{
+  "name": "sql-notebook",
+  "version": "1.0.0",
+  "description": "A Jupyter-like SQL notebook that runs entirely on your machine. Write and execute SQL across multiple databases from a single browser tab — no cloud, no accounts, no setup beyond a config file.",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "frontend/src/**/*.{js,jsx}": [
+      "prettier --write",
+      "bash -c 'cd frontend && ./node_modules/.bin/eslint --max-warnings=0 \"$@\"' --"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/venkateshtantravahi/sql-notebook.git"
+  },
+  "keywords": [],
+  "author": "venkateshtantravahi",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/venkateshtantravahi/sql-notebook/issues"
+  },
+  "homepage": "https://github.com/venkateshtantravahi/sql-notebook#readme",
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.3.2",
+    "prettier": "^3.8.1"
+  }
+}

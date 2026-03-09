@@ -1,0 +1,26 @@
+root = true
+
+#  All files
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+#  JSON / YAML — 2-space indent is conventional
+[*.{json,yml,yaml}]
+indent_size = 2
+
+#  Markdown — preserve trailing spaces (used for line breaks)
+[*.md]
+trim_trailing_whitespace = false
+
+#  Windows batch files — must use CRLF
+[*.bat]
+end_of_line = crlf
+
+# Dependencies — don't touch these
+[{node_modules,frontend/node_modules}/**]
+ignore = true

@@ -60,7 +60,7 @@ No request body or parameters required.
 curl http://localhost:8080/namespaces
 ----
 
----
+'''
 
 === POST /query
 

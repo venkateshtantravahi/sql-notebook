@@ -1,28 +1,26 @@
-import useThemeStore from "./store/useThemeStore.js";
-import Header from "./components/layout/Header.jsx";
-import Sidebar from "./components/layout/Sidebar.jsx";
-import MainArea from "./components/layout/MainArea.jsx";
-import BottomBar from "./components/layout/BottomBar.jsx";
-import ConfigModal from "./components/modal/ConfigModal.jsx";
-import SplashScreen from "./components/common/SplashScreen.jsx";
-import useNotebookStore from "./store/useNotebookStore.js";
-import useCellStore from "./store/useCellStore.js";
-import {useEffect, useRef, useState } from "react";
+import Header from './components/layout/Header.jsx'
+import Sidebar from './components/layout/Sidebar.jsx'
+import MainArea from './components/layout/MainArea.jsx'
+import BottomBar from './components/layout/BottomBar.jsx'
+import ConfigModal from './components/modal/ConfigModal.jsx'
+import SplashScreen from './components/common/SplashScreen.jsx'
+import useNotebookStore from './store/useNotebookStore.js'
+import useCellStore from './store/useCellStore.js'
+import { useEffect, useRef, useState } from 'react'
 
 const AUTOSAVE_DEBOUNCE_MS = 2000 // 2s of inactivity triggers a draft write
 
 function App() {
-    const { theme, toggleTheme } = useThemeStore()
-    const restoreTitle = useNotebookStore(s => s.restoreTitle)
-    const saveDraft = useNotebookStore(s => s.saveDraft)
-    const initFromDraft = useCellStore(s => s.initFromDraft)
-    const getSnapshot = useCellStore(s => s.getSnapshot)
+    const restoreTitle = useNotebookStore((s) => s.restoreTitle)
+    const saveDraft = useNotebookStore((s) => s.saveDraft)
+    const initFromDraft = useCellStore((s) => s.initFromDraft)
+    const getSnapshot = useCellStore((s) => s.getSnapshot)
 
     const debounceTimer = useRef(null)
     const isRestoring = useRef(true)
 
-    const [splashReady,   setSplashReady]   = useState(false)
-    const [splashDone,    setSplashDone]    = useState(false)
+    const [splashReady, setSplashReady] = useState(false)
+    const [splashDone, setSplashDone] = useState(false)
 
     // on mount: restore draft from backend
     useEffect(() => {
@@ -35,6 +33,7 @@ function App() {
             isRestoring.current = false
             setSplashReady(true)
         })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     useEffect(() => {
@@ -43,7 +42,7 @@ function App() {
         })
     }, [])
 
-    // autosave: subscribe to cell changes
+    // autosave: subscribe to cell changes — intentionally mount-only, Zustand refs are stable
     useEffect(() => {
         const unsubscribe = useCellStore.subscribe((newState, prevState) => {
             // Don't autosave while restoring from draft on first load
@@ -65,9 +64,10 @@ function App() {
             unsubscribe()
             clearTimeout(debounceTimer.current)
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    // also save draft when title changes
+    // also save draft when title changes — intentionally mount-only, Zustand refs are stable
     useEffect(() => {
         const unsubscribe = useCellStore.subscribe((newState, prevState) => {
             if (isRestoring.current) return
@@ -80,17 +80,13 @@ function App() {
             }, AUTOSAVE_DEBOUNCE_MS)
         })
         return () => unsubscribe()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     return (
         <>
             {/* Splash — rendered until backend init completes, then fades out */}
-            {!splashDone && (
-                <SplashScreen
-                    ready={splashReady}
-                    onDone={() => setSplashDone(true)}
-                />
-            )}
+            {!splashDone && <SplashScreen ready={splashReady} onDone={() => setSplashDone(true)} />}
             <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
                 <Header />
                 <Sidebar />

@@ -99,8 +99,8 @@ public class DuckDbRegistrar {
             return registerSqlite(fileName, namespace);
         }
 
-        String dbFile = DUCKDB_DIR + namespace + ".db";
-        String srcFile = UPLOAD_DIR + fileName;
+        String dbFile = safePath(DUCKDB_DIR ,namespace , ".db").toString();
+        String srcFile = safePath(UPLOAD_DIR , fileName, "").toString();
 
         // Build the DuckDB JDBC URL pointing to our per-namespace .db file
         String jdbcUrl = "jdbc:duckdb:" + dbFile;
@@ -129,7 +129,7 @@ public class DuckDbRegistrar {
      */
     public String registerRemote(String url, String namespace, S3Config s3Config) {
         String sanitised = uniqueNamespace(sanitise(namespace));
-        String dbFile = DUCKDB_DIR + sanitised + ".db";
+        String dbFile = safePath(DUCKDB_DIR , sanitised , ".db").toString();
         String jdbcUrl = "jdbc:duckdb:" + dbFile;
         String ext = inferRemoteExtension(url);
 
@@ -152,7 +152,7 @@ public class DuckDbRegistrar {
     public void deregister(String namespace) {
         registry.deregister(namespace);
 
-        Path dbFile = Paths.get(DUCKDB_DIR + namespace + ".db");
+        Path dbFile = safePath(DUCKDB_DIR , namespace , ".db");
         try {
             Files.deleteIfExists(dbFile);
             //DuckDB also creates a .db.wal file
@@ -177,7 +177,7 @@ public class DuckDbRegistrar {
             Files.list(uploadsDir).forEach(file -> {
                 String filename = file.getFileName().toString();
                 String namespace = sanitise(filename);
-                Path dbFile = Path.of(DUCKDB_DIR + namespace + ".db");
+                Path dbFile = safePath(DUCKDB_DIR , namespace , ".db");
 
                 // only re-register if the DuckDB file already exists
                 if (Files.exists(dbFile) && !registry.hasNamespace(namespace)) {
@@ -418,6 +418,20 @@ public class DuckDbRegistrar {
             String accessKeyId,
             String secretAccessKey
     ) {}
+
+    /**
+     * Validate that a resolved path stays within the expected base directory.
+     * Prevents path traversal attacks via filenames like "../../etc/passwd".
+     */
+    private Path safePath(String baseDir, String untrusted, String suffix) {
+        Path base     = Path.of(baseDir).normalize().toAbsolutePath();
+        Path resolved = base.resolve(untrusted + suffix).normalize().toAbsolutePath();
+        if (!resolved.startsWith(base)) {
+            throw new DuckDbRegistrarException(
+                    "Path traversal denied: resolved path escapes base directory");
+        }
+        return resolved;
+    }
 
     public static class DuckDbRegistrarException extends RuntimeException {
         public DuckDbRegistrarException(String message) { super(message); }
