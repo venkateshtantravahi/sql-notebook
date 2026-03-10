@@ -1,4 +1,5 @@
 import { useMemo, useEffect } from 'react'
+import { LuKey, LuLink2 } from 'react-icons/lu'
 import ReactFlow, {
     Background,
     Controls,
@@ -294,9 +295,15 @@ function TableNode({ data, selected }) {
                             overflow: 'hidden',
                         }}
                     >
-                        {col.primaryKey && <span style={{ fontSize: 9, flexShrink: 0 }}>🔑</span>}
+                        {col.primaryKey && (
+                            <LuKey
+                                style={{ color: '#fbbf24', flexShrink: 0, width: 10, height: 10 }}
+                            />
+                        )}
                         {col.foreignKey && !col.primaryKey && (
-                            <span style={{ fontSize: 9, flexShrink: 0 }}>🔗</span>
+                            <LuLink2
+                                style={{ color: '#60a5fa', flexShrink: 0, width: 10, height: 10 }}
+                            />
                         )}
                         <span
                             style={{

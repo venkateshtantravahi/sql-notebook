@@ -1,4 +1,5 @@
 import { CgSpinner } from 'react-icons/cg'
+import { LuChevronsLeft, LuChevronLeft, LuChevronRight, LuChevronsRight } from 'react-icons/lu'
 import { useState, useEffect } from 'react'
 
 const PAGE_SIZE = 100
@@ -142,14 +143,14 @@ function ResultsTable({ results, error, status }) {
                     {/* Page controls */}
                     <div className="flex items-center gap-1">
                         <PagBtn onClick={() => goTo(1)} disabled={page === 1} title="First page">
-                            «
+                            <LuChevronsLeft size={12} />
                         </PagBtn>
                         <PagBtn
                             onClick={() => goTo(page - 1)}
                             disabled={page === 1}
                             title="Previous page"
                         >
-                            ‹
+                            <LuChevronLeft size={12} />
                         </PagBtn>
 
                         {/* Page number pills */}
@@ -181,14 +182,14 @@ function ResultsTable({ results, error, status }) {
                             disabled={page === totalPages}
                             title="Next page"
                         >
-                            ›
+                            <LuChevronRight size={12} />
                         </PagBtn>
                         <PagBtn
                             onClick={() => goTo(totalPages)}
                             disabled={page === totalPages}
                             title="Last page"
                         >
-                            »
+                            <LuChevronsRight size={12} />
                         </PagBtn>
                     </div>
                 </div>
