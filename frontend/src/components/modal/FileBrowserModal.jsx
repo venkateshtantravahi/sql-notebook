@@ -1,4 +1,5 @@
-import { MdCheckCircle, MdClose } from 'react-icons/md'
+import { MdCheckCircle, MdClose, MdChevronRight } from 'react-icons/md'
+import { LuArrowUp, LuFolder, LuDatabase } from 'react-icons/lu'
 import { useState, useEffect, useCallback } from 'react'
 
 /**
@@ -163,7 +164,7 @@ function FileBrowserModal({ isOpen, onSelect, onClose, initialPath }) {
                                         transition-colors
                                     "
                                 >
-                                    <span className="text-base">↑</span>
+                                    <LuArrowUp size={13} />
                                     <span>.. (up one level)</span>
                                 </button>
                             )}
@@ -196,8 +197,12 @@ function FileBrowserModal({ isOpen, onSelect, onClose, initialPath }) {
                                             }
                                         `}
                                     >
-                                        <span className="text-base shrink-0">
-                                            {isDir ? '📁' : '🗄️'}
+                                        <span className="shrink-0 flex items-center">
+                                            {isDir ? (
+                                                <LuFolder size={14} className="text-amber-400" />
+                                            ) : (
+                                                <LuDatabase size={14} className="text-blue-400" />
+                                            )}
                                         </span>
                                         <span
                                             className={`flex-1 truncate ${
@@ -216,9 +221,10 @@ function FileBrowserModal({ isOpen, onSelect, onClose, initialPath }) {
                                             </span>
                                         )}
                                         {isDir && (
-                                            <span className="text-gray-300 dark:text-gray-700 shrink-0 text-xs">
-                                                ›
-                                            </span>
+                                            <MdChevronRight
+                                                size={14}
+                                                className="text-gray-300 dark:text-gray-700 shrink-0"
+                                            />
                                         )}
                                     </button>
                                 )

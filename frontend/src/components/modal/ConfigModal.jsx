@@ -1,4 +1,5 @@
 import { MdCheckCircle, MdErrorOutline, MdClose } from 'react-icons/md'
+import { LuFolderOpen } from 'react-icons/lu'
 import { useState, useEffect, useRef } from 'react'
 import useConfigModalStore from '../../store/useConfigModalStore.js'
 import FileBrowserModal from './FileBrowserModal.jsx'
@@ -375,7 +376,7 @@ function ConfigModal() {
                                         className="shrink-0 px-3 py-2 rounded text-xs font-mono border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
                                         title="Browse filesystem for .db file"
                                     >
-                                        📁 Browse
+                                        <LuFolderOpen size={13} className="inline mr-1" /> Browse
                                     </button>
                                 </div>
                             ) : (

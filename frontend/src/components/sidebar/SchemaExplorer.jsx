@@ -2,39 +2,59 @@ import { useState } from 'react'
 import useSchema from '../../hooks/useSchema.js'
 import useThemeStore from '../../store/useThemeStore.js'
 import SchemaErd from './SchemaErd.jsx'
+import { LuKey, LuLink2 } from 'react-icons/lu'
+import { MdAccountTree, MdExpandMore, MdChevronRight } from 'react-icons/md'
+import { TbTopologyComplex } from 'react-icons/tb'
 
 // type badge
 function TypeBadge({ type }) {
-    const color =
-        type.includes('INT')     ? 'text-blue-400' :
-            type.includes('VARCHAR') ? 'text-green-400' :
-                type.includes('TEXT')    ? 'text-green-400' :
-                    type.includes('NVAR')    ? 'text-green-400' :
-                        type.includes('DATE')    ? 'text-purple-400' :
-                            type.includes('TIME')    ? 'text-purple-400' :
-                                type.includes('BOOL')    ? 'text-yellow-400' :
-                                    type.includes('DECIMAL') ? 'text-orange-400' :
-                                        type.includes('NUMERIC') ? 'text-orange-400' :
-                                            type.includes('FLOAT')   ? 'text-orange-400' :
-                                                type.includes('MONEY')   ? 'text-orange-400' :
-                                                    'text-gray-400 dark:text-gray-500'
+    const color = type.includes('INT')
+        ? 'text-blue-400'
+        : type.includes('VARCHAR')
+          ? 'text-green-400'
+          : type.includes('TEXT')
+            ? 'text-green-400'
+            : type.includes('NVAR')
+              ? 'text-green-400'
+              : type.includes('DATE')
+                ? 'text-purple-400'
+                : type.includes('TIME')
+                  ? 'text-purple-400'
+                  : type.includes('BOOL')
+                    ? 'text-yellow-400'
+                    : type.includes('DECIMAL')
+                      ? 'text-orange-400'
+                      : type.includes('NUMERIC')
+                        ? 'text-orange-400'
+                        : type.includes('FLOAT')
+                          ? 'text-orange-400'
+                          : type.includes('MONEY')
+                            ? 'text-orange-400'
+                            : 'text-gray-400 dark:text-gray-500'
     return <span className={`font-mono text-xs ${color}`}>{type}</span>
 }
 
 // column row
 function ColumnRow({ column }) {
-    const icon = column.primaryKey ? '🔑' : column.foreignKey ? '🔗' : null
+    const icon = column.primaryKey ? (
+        <LuKey className="text-amber-400 flex-shrink-0" size={11} />
+    ) : column.foreignKey ? (
+        <LuLink2 className="text-blue-400 flex-shrink-0" size={11} />
+    ) : null
     return (
-        <div className="
+        <div
+            className="
             flex items-center justify-between
             pl-6 pr-3 py-0.5 rounded group cursor-pointer
             hover:bg-gray-100 dark:hover:bg-gray-800
-        ">
+        "
+        >
             <div className="flex items-center gap-1.5 min-w-0">
-                {icon
-                    ? <span className="text-xs w-4 flex-shrink-0">{icon}</span>
-                    : <span className="w-4 flex-shrink-0" />
-                }
+                {icon ? (
+                    <span className="w-4 flex-shrink-0 flex items-center">{icon}</span>
+                ) : (
+                    <span className="w-4 flex-shrink-0" />
+                )}
                 <span className="font-mono text-xs truncate text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100">
                     {column.name}
                 </span>
@@ -46,10 +66,24 @@ function ColumnRow({ column }) {
 
 // table block
 function TableBlock({ table }) {
+    const [open, setOpen] = useState(true)
     return (
         <div className="mb-1">
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded cursor-pointer group hover:bg-gray-100 dark:hover:bg-gray-800">
-                <span className="text-gray-400 dark:text-gray-600 text-xs">▼</span>
+            <div
+                className="flex items-center gap-1.5 px-3 py-1 rounded cursor-pointer group hover:bg-gray-100 dark:hover:bg-gray-800"
+                onClick={() => setOpen((o) => !o)}
+            >
+                {open ? (
+                    <MdExpandMore
+                        className="text-gray-400 dark:text-gray-600 flex-shrink-0"
+                        size={14}
+                    />
+                ) : (
+                    <MdChevronRight
+                        className="text-gray-400 dark:text-gray-600 flex-shrink-0"
+                        size={14}
+                    />
+                )}
                 <span className="text-xs font-semibold font-mono text-gray-700 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-gray-100">
                     {table.name}
                 </span>
@@ -57,21 +91,31 @@ function TableBlock({ table }) {
                     {table.columns.length}
                 </span>
             </div>
-            <div>
-                {table.columns.map(col => (
-                    <ColumnRow key={col.name} column={col} />
-                ))}
-            </div>
+            {open && (
+                <div>
+                    {table.columns.map((col) => (
+                        <ColumnRow key={col.name} column={col} />
+                    ))}
+                </div>
+            )}
         </div>
     )
 }
 
 //  namespace block
 function NamespaceBlock({ ns }) {
+    const [open, setOpen] = useState(true)
     return (
         <div className="mb-4">
-            <div className="px-3 py-1.5 mb-1 flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
+            <div
+                className="px-3 py-1.5 mb-1 flex items-center gap-2 cursor-pointer rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                onClick={() => setOpen((o) => !o)}
+            >
+                {open ? (
+                    <MdExpandMore className="text-emerald-400 flex-shrink-0" size={14} />
+                ) : (
+                    <MdChevronRight className="text-emerald-400 flex-shrink-0" size={14} />
+                )}
                 <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-white font-mono">
                     {ns.namespace}
                 </span>
@@ -79,11 +123,13 @@ function NamespaceBlock({ ns }) {
                     {ns.tables.length} tables
                 </span>
             </div>
-            <div className="px-1">
-                {ns.tables.map(table => (
-                    <TableBlock key={table.name} table={table} />
-                ))}
-            </div>
+            {open && (
+                <div className="px-1">
+                    {ns.tables.map((table) => (
+                        <TableBlock key={table.name} table={table} />
+                    ))}
+                </div>
+            )}
         </div>
     )
 }
@@ -102,7 +148,7 @@ function SchemaExplorer({ activeNamespace }) {
     if (loading) {
         return (
             <div className="p-3 space-y-2">
-                {[1, 2, 3].map(i => (
+                {[1, 2, 3].map((i) => (
                     <div key={i} className="animate-pulse">
                         <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded w-3/4 mb-1.5" />
                         <div className="h-2.5 bg-gray-100 dark:bg-gray-800 rounded w-full mb-1" />
@@ -118,13 +164,15 @@ function SchemaExplorer({ activeNamespace }) {
         return (
             <div className="p-3">
                 <p className="text-xs text-red-400 dark:text-red-500">Failed to load schema</p>
-                <p className="text-xs text-gray-400 dark:text-gray-600 mt-1 font-mono break-all">{error}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-600 mt-1 font-mono break-all">
+                    {error}
+                </p>
             </div>
         )
     }
 
     const visible = activeNamespace
-        ? schema.filter(ns => ns.namespace === activeNamespace)
+        ? schema.filter((ns) => ns.namespace === activeNamespace)
         : schema
 
     if (visible.length === 0) {
@@ -140,29 +188,42 @@ function SchemaExplorer({ activeNamespace }) {
     }
 
     // Collect all tables for the active namespace(s) for ERD view
-    const erdTables = visible.flatMap(ns => ns.tables)
+    const erdTables = visible.flatMap((ns) => ns.tables)
 
     return (
         <div className="flex flex-col h-full">
             {/*  View toggle  */}
-            <div className="
+            <div
+                className="
                 flex-shrink-0 flex items-center gap-1 px-3 py-1.5
                 border-b border-gray-200 dark:border-gray-800
                 bg-gray-50 dark:bg-gray-900
-            ">
-                {['tree', 'erd'].map(v => (
+            "
+            >
+                {['tree', 'erd'].map((v) => (
                     <button
                         key={v}
                         onClick={() => setView(v)}
                         className={`
                             px-2.5 py-0.5 rounded text-xs font-medium transition-colors
-                            ${view === v
-                            ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-white'
-                            : 'text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400'
-                        }
+                            ${
+                                view === v
+                                    ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-white'
+                                    : 'text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400'
+                            }
                         `}
                     >
-                        {v === 'tree' ? '≡ Tree' : '⬡ ERD'}
+                        <span className="flex items-center gap-1">
+                            {v === 'tree' ? (
+                                <>
+                                    <MdAccountTree size={13} /> Tree
+                                </>
+                            ) : (
+                                <>
+                                    <TbTopologyComplex size={13} /> ERD
+                                </>
+                            )}
+                        </span>
                     </button>
                 ))}
             </div>
@@ -170,7 +231,7 @@ function SchemaExplorer({ activeNamespace }) {
             {/*  Content  */}
             {view === 'tree' ? (
                 <div className="flex-1 overflow-y-auto py-2">
-                    {visible.map(ns => (
+                    {visible.map((ns) => (
                         <NamespaceBlock key={ns.namespace} ns={ns} />
                     ))}
                 </div>
