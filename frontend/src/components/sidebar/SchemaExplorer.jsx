@@ -37,9 +37,9 @@ function TypeBadge({ type }) {
 // column row
 function ColumnRow({ column }) {
     const icon = column.primaryKey ? (
-        <LuKey className="text-amber-400 flex-shrink-0" size={11} />
+        <LuKey className="text-amber-400 shrink-0" size={11} />
     ) : column.foreignKey ? (
-        <LuLink2 className="text-blue-400 flex-shrink-0" size={11} />
+        <LuLink2 className="text-blue-400 shrink-0" size={11} />
     ) : null
     return (
         <div
@@ -51,9 +51,9 @@ function ColumnRow({ column }) {
         >
             <div className="flex items-center gap-1.5 min-w-0">
                 {icon ? (
-                    <span className="w-4 flex-shrink-0 flex items-center">{icon}</span>
+                    <span className="w-4 shrink-0 flex items-center">{icon}</span>
                 ) : (
-                    <span className="w-4 flex-shrink-0" />
+                    <span className="w-4 shrink-0" />
                 )}
                 <span className="font-mono text-xs truncate text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100">
                     {column.name}
@@ -74,13 +74,10 @@ function TableBlock({ table }) {
                 onClick={() => setOpen((o) => !o)}
             >
                 {open ? (
-                    <MdExpandMore
-                        className="text-gray-400 dark:text-gray-600 flex-shrink-0"
-                        size={14}
-                    />
+                    <MdExpandMore className="text-gray-400 dark:text-gray-600 shrink-0" size={14} />
                 ) : (
                     <MdChevronRight
-                        className="text-gray-400 dark:text-gray-600 flex-shrink-0"
+                        className="text-gray-400 dark:text-gray-600 shrink-0"
                         size={14}
                     />
                 )}
@@ -112,9 +109,9 @@ function NamespaceBlock({ ns }) {
                 onClick={() => setOpen((o) => !o)}
             >
                 {open ? (
-                    <MdExpandMore className="text-emerald-400 flex-shrink-0" size={14} />
+                    <MdExpandMore className="text-emerald-400 shrink-0" size={14} />
                 ) : (
-                    <MdChevronRight className="text-emerald-400 flex-shrink-0" size={14} />
+                    <MdChevronRight className="text-emerald-400 shrink-0" size={14} />
                 )}
                 <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-white font-mono">
                     {ns.namespace}
@@ -195,7 +192,7 @@ function SchemaExplorer({ activeNamespace }) {
             {/*  View toggle  */}
             <div
                 className="
-                flex-shrink-0 flex items-center gap-1 px-3 py-1.5
+                shrink-0 flex items-center gap-1 px-3 py-1.5
                 border-b border-gray-200 dark:border-gray-800
                 bg-gray-50 dark:bg-gray-900
             "

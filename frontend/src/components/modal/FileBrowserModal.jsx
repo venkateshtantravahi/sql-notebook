@@ -2,16 +2,10 @@ import { MdCheckCircle, MdClose, MdChevronRight } from 'react-icons/md'
 import { LuArrowUp, LuFolder, LuDatabase } from 'react-icons/lu'
 import { useState, useEffect, useCallback } from 'react'
 
-/**
- * FileBrowserModal
- *
- * Opens a modal that lets the user navigate their server-side filesystem
- * and pick a .db / .sqlite / .sqlite3 file. Calls onSelect(absolutePath)
- * when a file is chosen.
- *
- * Uses GET /files/browse?path= which returns:
- * { path, parent, entries: [{name, type, size?}] }
- */
+// FileBrowserModal
+// Lets the user navigate the server-side filesystem and pick a .db / .sqlite file.
+// Calls onSelect(absolutePath) when a file is chosen.
+// Uses GET /files/browse?path= → { path, parent, entries: [{name, type, size?}] }
 
 function formatSize(bytes) {
     if (bytes == null) return ''

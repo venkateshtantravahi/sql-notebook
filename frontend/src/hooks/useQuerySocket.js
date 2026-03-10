@@ -1,34 +1,17 @@
 import { useEffect, useRef, useCallback } from 'react'
 import useCellStore from '../store/useCellStore.js'
 
-/**
- * useQuerySocket
- *
- * Manages a singleton WebSocket connection to the backend query endpoint.
- * Returns a `runQuery(cellId, namespace, query)` function.
- *
- * Resilience strategy:
- *   - If the socket closes unexpectedly, reconnect with exponential backoff
- *     (1s → 2s → 4s, max 3 attempts before giving up)
- *   - If a query is in-flight when the socket dies, surface an error on that
- *     cell immediately rather than leaving it spinning forever
- *   - On reconnect, the caller can re-run the query — cells are not auto-retried
- *     because a failed query mid-execution may have had partial side effects
- *     (e.g. partial INSERT) and auto-retry could be dangerous
- *   - Intentional close (component unmount) does not trigger reconnect
- *
- * Protocol:
- *   Send:    { cellId: string, namespace: string, query: string }
- *   Receive: { cellId, status: 'running' }
- *            { cellId, status: 'done',  result: { columns, rows, rowCount, duration } }
- *            { cellId, status: 'error', error: string }
- */
-
+// useQuerySocket — manages a singleton WebSocket to the backend query endpoint.
+// Returns runQuery(cellId, namespace, query).
+// Reconnects with exponential backoff on unexpected close (max 3 attempts).
+// In-flight queries surface an error immediately if the socket dies.
+// Protocol — send: { cellId, namespace, query }
+//           receive: { cellId, status: 'running' | 'done' | 'error', result?, error? }
 
 // singleton socket
-let socket         = null
+let socket = null
 let reconnectTimer = null
-let pingInterval   = null
+let pingInterval = null
 let retryCount = 0
 let intentionalStop = false
 let inFlightCellId = null
@@ -55,8 +38,11 @@ export function useQuerySocket() {
         intentionalStop = false
 
         function connect() {
-            if (socket && (socket.readyState === WebSocket.OPEN ||
-                socket.readyState === WebSocket.CONNECTING)) return
+            if (
+                socket &&
+                (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)
+            )
+                return
 
             const url = getWsUrl()
             console.debug('[WS] connecting to', url)
@@ -79,7 +65,9 @@ export function useQuerySocket() {
             socket.onmessage = (event) => {
                 console.debug('[WS] message:', event.data)
                 let msg
-                try { msg = JSON.parse(event.data) } catch (e) {
+                try {
+                    msg = JSON.parse(event.data)
+                } catch (e) {
                     console.error('[WS] failed to parse message:', event.data, e)
                     return
                 }
@@ -101,8 +89,8 @@ export function useQuerySocket() {
                     inFlightCellId = null
                     if (result?.success) {
                         setResults(id, {
-                            columns:  result.columns  ?? [],
-                            rows:     result.rows     ?? [],
+                            columns: result.columns ?? [],
+                            rows: result.rows ?? [],
                             rowCount: result.rows?.length ?? 0,
                             duration: result.executionTimeMs ?? 0,
                         })
@@ -126,7 +114,7 @@ export function useQuerySocket() {
                     handlersRef.current.setError(
                         inFlightCellId,
                         'Connection lost while query was running. ' +
-                        'Check the backend is running and try again.'
+                            'Check the backend is running and try again.'
                     )
                     inFlightCellId = null
                 }
@@ -138,7 +126,7 @@ export function useQuerySocket() {
                 if (retryCount >= MAX_RETRIES) {
                     console.warn(
                         `[ws] Giving up after ${MAX_RETRIES} attempts. ` +
-                        'Reload the page or restart the backend.'
+                            'Reload the page or restart the backend.'
                     )
                     return
                 }
@@ -146,8 +134,7 @@ export function useQuerySocket() {
                 const delay = BASE_BACKOFF_MS * Math.pow(2, retryCount)
                 retryCount++
                 console.info(
-                    `[ws] Reconnecting in ${delay}ms ` +
-                    `(attempt ${retryCount}/${MAX_RETRIES})…`
+                    `[ws] Reconnecting in ${delay}ms ` + `(attempt ${retryCount}/${MAX_RETRIES})…`
                 )
                 reconnectTimer = setTimeout(connect, delay)
             }

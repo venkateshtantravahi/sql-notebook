@@ -1,23 +1,9 @@
 import { useEffect, useState } from 'react'
 import { SqlNotebookLogo } from './SqlNotebookLogo'
 
-/**
- * SplashScreen
- *
- * loading screen. Shows while the app initialises (backend
- * draft restore, namespace fetch etc.). Fades out once `ready` is true.
- *
- * Animation sequence:
- *   0ms    → screen visible, logo starts at y-12 opacity-0
- *   200ms  → logo drops to y-0, opacity-1 (drop-in)
- *   400ms  → wordmark fades in beneath logo
- *   600ms  → progress bar begins filling
- *   (ready=true) → bar snaps to 100%, then entire screen fades out after 400ms
- *
- * Props:
- *   ready     boolean — when true triggers the exit animation
- *   onDone    fn      — called after exit animation completes (unmount signal)
- */
+// SplashScreen — loading screen shown while the app initialises.
+// Fades out once `ready` is true, then calls `onDone` to signal unmount.
+// Animation: logo drop-in (200ms) → wordmark fade (400ms) → progress bar (600ms) → exit.
 function SplashScreen({ ready, onDone }) {
     const [logoVisible, setLogoVisible] = useState(false)
     const [wordVisible, setWordVisible] = useState(false)
