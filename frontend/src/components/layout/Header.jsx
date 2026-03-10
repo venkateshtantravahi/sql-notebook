@@ -5,6 +5,7 @@ import useSidebarStore from '../../store/useSidebarStore.js'
 import useZoomStore from '../../store/useZoomStore.js'
 import useNotebookStore from '../../store/useNotebookStore.js'
 import useCellStore from '../../store/useCellStore.js'
+import { useQuerySocket } from '../../hooks/useQuerySocket.js'
 import { SqlNotebookMark } from '../common/SqlNotebookLogo.jsx'
 import KeyboardShortcutsModal from '../modal/KeyboardShortcutsModal.jsx'
 import AboutModal from '../modal/AboutModal.jsx'
@@ -12,7 +13,7 @@ import { GoGear } from 'react-icons/go'
 import { HiOutlinePencilSquare } from 'react-icons/hi2'
 import FileSourceModal from '../modal/FileSourceModal.jsx'
 import useFileSourceModalStore from '../../store/useFileSourceModalStore.js'
-import { MdDarkMode, MdLightMode } from 'react-icons/md'
+import { MdDarkMode, MdLightMode, MdChevronRight } from 'react-icons/md'
 
 // menu definitions
 
@@ -26,7 +27,14 @@ function buildMenus(actions) {
             { label: 'Save As...', shortcut: '⌘⇧S', action: actions.saveAs },
             { label: 'Rename', action: actions.rename },
             { divider: true },
-            { label: 'Export Notebook As...', action: actions.exportNotebook },
+            {
+                label: 'Export Notebook As...',
+                submenu: [
+                    { label: 'HTML...', action: actions.exportHTML },
+                    { label: 'Markdown...', action: actions.exportMarkdown },
+                    { label: 'SQL Script...', action: actions.exportSQL },
+                ],
+            },
             { divider: true },
             { label: 'Add Data Source...', action: actions.addDataSource },
         ],
@@ -48,6 +56,61 @@ function buildMenus(actions) {
 }
 
 // dropdown component
+
+function SubItem({ item, onClose }) {
+    const [open, setOpen] = useState(false)
+    return (
+        <div
+            className="relative"
+            onMouseEnter={() => setOpen(true)}
+            onMouseLeave={() => setOpen(false)}
+        >
+            <button
+                className="
+                w-full flex items-center justify-between
+                px-3 py-1.5 text-xs
+                text-gray-700 dark:text-amber-50
+                hover:bg-gray-50 dark:hover:bg-gray-700
+                hover:text-gray-900 dark:hover:text-gray-100
+                transition-colors
+            "
+            >
+                <span>{item.label}</span>
+                <MdChevronRight size={14} className="text-gray-400 dark:text-gray-500" />
+            </button>
+            {open && (
+                <div
+                    className="
+                    absolute left-full top-0 ml-1 z-50
+                    min-w-44 py-1 rounded-md shadow-lg
+                    bg-white dark:bg-gray-800
+                    border border-gray-200 dark:border-gray-700
+                "
+                >
+                    {item.submenu.map((sub) => (
+                        <button
+                            key={sub.label}
+                            onClick={() => {
+                                sub.action?.()
+                                onClose()
+                            }}
+                            className="
+                                w-full flex items-center
+                                px-3 py-1.5 text-xs
+                                text-gray-700 dark:text-amber-50
+                                hover:bg-gray-50 dark:hover:bg-gray-700
+                                hover:text-gray-900 dark:hover:text-gray-100
+                                transition-colors
+                            "
+                        >
+                            {sub.label}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
 
 function Dropdown({ label, items, open, onToggle, onClose }) {
     const ref = useRef(null)
@@ -93,6 +156,8 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
                                 key={i}
                                 className="my-1 border-t border-gray-100 dark:border-gray-700"
                             />
+                        ) : item.submenu ? (
+                            <SubItem key={item.label} item={item} onClose={onClose} />
                         ) : (
                             <button
                                 key={item.label}
@@ -214,6 +279,7 @@ function Header() {
     const { zoomIn, zoomOut, reset: resetZoom } = useZoomStore()
     const { markSaved, newNotebook: newNb, setTitle } = useNotebookStore()
     const { getSnapshot, loadSnapshot, clearCells } = useCellStore()
+    const runQuery = useQuerySocket()
     const titleEditRef = useRef(null)
 
     const [openMenu, setOpenMenu] = useState(null)
@@ -253,6 +319,10 @@ function Header() {
             if (e.key === 'n') {
                 e.preventDefault()
                 handleNew()
+            }
+            if (e.key === 'Enter' && e.shiftKey) {
+                e.preventDefault()
+                handleRunAll()
             }
         }
         document.addEventListener('keydown', handle)
@@ -328,6 +398,14 @@ function Header() {
         }
     }
 
+    function handleRunAll() {
+        useCellStore.getState().cells.forEach((cell) => {
+            if (cell.type !== 'markdown' && cell.namespace && cell.query.trim()) {
+                runQuery(cell.id, cell.namespace, cell.query.trim())
+            }
+        })
+    }
+
     function handleNew() {
         if (window.confirm('Start a new notebook? Unsaved changes will be lost.')) {
             clearCells()
@@ -360,25 +438,93 @@ function Header() {
         }
     }
 
-    async function handleExportNotebook() {
-        const snapshots = getSnapshot()
-        const { title } = useNotebookStore.getState()
-        const data = buildSqlnb(title, snapshots)
+    function downloadBlob(filename, content, mime = 'text/plain') {
+        const blob = new Blob([content], { type: mime })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        a.click()
+        URL.revokeObjectURL(url)
+    }
 
-        try {
-            const handle = await window.showSaveFilePicker({
-                suggestedName: `${title.replace(/\s+/g, '-')}.sqlnb`,
-                types: [
-                    {
-                        description: 'SQL Notebook',
-                        accept: { 'application/x-sqlnotebook': ['.sqlnb'] },
-                    },
-                ],
+    function slug(title) {
+        return title.replace(/\s+/g, '-')
+    }
+
+    function handleExportHTML() {
+        const cells = getSnapshot()
+        const { title } = useNotebookStore.getState()
+        const cellsHtml = cells
+            .map((c) => {
+                if (c.type === 'markdown') {
+                    // Wrap raw markdown in a preformatted block for portability
+                    return `<div class="cell markdown-cell"><pre class="md-source">${escHtml(c.content)}</pre></div>`
+                }
+                return `<div class="cell sql-cell"><pre><code>${escHtml(c.query)}</code></pre></div>`
             })
-            await writeSqlnbFile(handle, data)
-        } catch (err) {
-            if (err.name !== 'AbortError') console.error('Export failed', err)
-        }
+            .join('\n')
+
+        const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>${escHtml(title)}</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; color: #1f2937; }
+  h1 { font-size: 1.4rem; margin-bottom: 1.5rem; }
+  .cell { margin-bottom: 1.25rem; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+  .cell pre { margin: 0; padding: 1rem; background: #f9fafb; font-family: 'JetBrains Mono', 'Fira Code', Menlo, monospace; font-size: 13px; overflow-x: auto; white-space: pre-wrap; }
+  .sql-cell pre { background: #f3f4f6; }
+  .markdown-cell .md-source { background: #fafafa; color: #374151; }
+  .exported { font-size: 0.75rem; color: #9ca3af; margin-bottom: 1rem; }
+</style>
+</head>
+<body>
+<h1>${escHtml(title)}</h1>
+<p class="exported">Exported from sql-notebook on ${new Date().toLocaleString()}</p>
+${cellsHtml}
+</body>
+</html>`
+        downloadBlob(`${slug(title)}.html`, html, 'text/html')
+    }
+
+    function handleExportMarkdown() {
+        const cells = getSnapshot()
+        const { title } = useNotebookStore.getState()
+        const parts = [`# ${title}`, '']
+        cells.forEach((c) => {
+            if (c.type === 'markdown') {
+                parts.push(c.content, '')
+            } else {
+                parts.push('```sql', c.query, '```', '')
+            }
+        })
+        downloadBlob(`${slug(title)}.md`, parts.join('\n'))
+    }
+
+    function handleExportSQL() {
+        const cells = getSnapshot()
+        const { title } = useNotebookStore.getState()
+        const lines = [`-- Notebook: ${title}`, `-- Exported: ${new Date().toISOString()}`, '']
+        cells.forEach((c) => {
+            if (c.type === 'markdown') {
+                c.content.split('\n').forEach((line) => lines.push(`-- ${line}`))
+                lines.push('')
+            } else {
+                const q = c.query.trimEnd()
+                lines.push(q.endsWith(';') ? q : q + ';', '')
+            }
+        })
+        downloadBlob(`${slug(title)}.sql`, lines.join('\n'))
+    }
+
+    function escHtml(str) {
+        return (str ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
     }
 
     // menu definitions with wired actions
@@ -389,7 +535,9 @@ function Header() {
         save: handleSave,
         saveAs: handleSaveAs,
         rename: () => titleEditRef.current?.(),
-        exportNotebook: handleExportNotebook,
+        exportHTML: handleExportHTML,
+        exportMarkdown: handleExportMarkdown,
+        exportSQL: handleExportSQL,
         addDataSource: openFileSource,
         toggleSidebar,
         toggleTheme,

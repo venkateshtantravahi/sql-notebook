@@ -75,11 +75,15 @@ export function useQuerySocket() {
                 // Ignore server-side pong replies
                 if (msg.type === 'pong') return
 
-                const { cellId, status, result, message } = msg
+                // Backend sends: { cellId, status, result, error }
+                // (field is "error", not "message")
+                const { cellId, status, result, error: backendError } = msg
                 if (cellId === undefined || cellId === null) return
 
                 // Normalise to number — cell store uses numeric ids
                 const id = typeof cellId === 'string' ? parseInt(cellId, 10) : cellId
+                if (isNaN(id)) return // ignore responses for unknown/ping cellIds
+
                 const { setRunning, setResults, setError } = handlersRef.current
 
                 if (status === 'running') {
@@ -99,7 +103,7 @@ export function useQuerySocket() {
                     }
                 } else if (status === 'error') {
                     inFlightCellId = null
-                    setError(id, message ?? 'Unknown error')
+                    setError(id, backendError ?? 'Unknown error')
                 }
             }
 

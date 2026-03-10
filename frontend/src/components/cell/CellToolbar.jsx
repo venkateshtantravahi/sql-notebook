@@ -44,7 +44,7 @@ function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
     const isRunning = cell.status === 'running'
     const hasResults = cell.status === 'done' && cell.results
 
-    // Fetch live namespaces from backend
+    // Fetch live namespaces from backend (?all=true includes ephemeral DuckDB sources)
     useEffect(() => {
         fetch('/namespaces?all=true')
             .then((r) => (r.ok ? r.json() : []))
@@ -57,6 +57,14 @@ function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
             })
             .catch(() => setNamespaces([]))
     }, [])
+
+    // While the fetch is pending, the cell's saved namespace may not be in the list yet.
+    // Add it as a fallback so the select shows the correct value immediately on load,
+    // instead of falling back to the placeholder during the ping-based fetch.
+    const visibleNamespaces =
+        cell.namespace && !namespaces.includes(cell.namespace)
+            ? [cell.namespace, ...namespaces]
+            : namespaces
 
     return (
         <div
@@ -85,11 +93,11 @@ function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
         "
             >
                 <option value="" disabled>
-                    {namespaces.length === 0
+                    {visibleNamespaces.length === 0
                         ? 'No namespaces — click ⚙ Config'
                         : 'Select namespace'}
                 </option>
-                {namespaces.map((ns) => (
+                {visibleNamespaces.map((ns) => (
                     <option key={ns} value={ns}>
                         {ns}
                     </option>

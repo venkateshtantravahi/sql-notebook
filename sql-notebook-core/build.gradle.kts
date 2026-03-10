@@ -99,17 +99,19 @@ application {
 
 // run task
 tasks.named<JavaExec>("run") {
+    val appVersion = project.version.toString()
     description = "Start the sql-notebook backend server"
     group = "application"
     workingDir = rootProject.projectDir
     standardInput = System.`in`
     doFirst {
-        println("\n sql-notebook v${project.version} starting on http://localhost:8080\n")
+        println("\n sql-notebook v$appVersion starting on http://localhost:8080\n")
     }
 }
 
 // dev run task — skips frontend build
 tasks.register<JavaExec>("runDev") {
+    val appVersion = project.version.toString()
     description = "Start backend only (skips frontend build - use during development)"
     group = "application"
     mainClass = "io.sqlnotebook.App"
@@ -117,7 +119,7 @@ tasks.register<JavaExec>("runDev") {
     workingDir = rootProject.projectDir
     standardInput = System.`in`
     doFirst {
-        println("\n sql-notebook v${project.version} [dev] starting on http://localhost:8080\n")
+        println("\n sql-notebook v$appVersion [dev] starting on http://localhost:8080\n")
         println("  Frontend not built - open frontend separately with: cd frontend && npm run dev")
     }
 }

@@ -1,5 +1,40 @@
 import useCellStore from '../../store/useCellStore.js'
 import SqlCell from '../cell/SqlCell.jsx'
+import MarkdownCell from '../cell/MarkdownCell.jsx'
+
+function AddCellBar() {
+    const { addCell } = useCellStore()
+    return (
+        <div className="flex items-center gap-2">
+            <button
+                onClick={() => addCell('sql')}
+                className="
+                    flex-1 py-2 rounded-lg
+                    border border-dashed border-gray-300 dark:border-gray-700
+                    text-xs text-gray-400 dark:text-gray-600
+                    hover:border-blue-400 dark:hover:border-blue-600
+                    hover:text-blue-500 dark:hover:text-blue-400
+                    transition-colors
+                "
+            >
+                + SQL
+            </button>
+            <button
+                onClick={() => addCell('markdown')}
+                className="
+                    flex-1 py-2 rounded-lg
+                    border border-dashed border-gray-300 dark:border-gray-700
+                    text-xs text-gray-400 dark:text-gray-600
+                    hover:border-purple-400 dark:hover:border-purple-600
+                    hover:text-purple-500 dark:hover:text-purple-400
+                    transition-colors
+                "
+            >
+                + Markdown
+            </button>
+        </div>
+    )
+}
 
 function MainArea() {
     const { cells, addCell } = useCellStore()
@@ -26,35 +61,39 @@ function MainArea() {
                     <p className="text-xs text-gray-400 dark:text-gray-600 text-center max-w-xs">
                         Add a cell to start writing SQL across your connected databases
                     </p>
-                    <button
-                        onClick={addCell}
-                        className="
-                            mt-2 text-xs px-4 py-2 rounded
-                            bg-blue-600 hover:bg-blue-500
-                            text-white font-medium transition-colors
-                        "
-                    >
-                        + Add your first cell
-                    </button>
+                    <div className="flex items-center gap-2 mt-2">
+                        <button
+                            onClick={() => addCell('sql')}
+                            className="
+                                text-xs px-4 py-2 rounded
+                                bg-blue-600 hover:bg-blue-500
+                                text-white font-medium transition-colors
+                            "
+                        >
+                            + SQL cell
+                        </button>
+                        <button
+                            onClick={() => addCell('markdown')}
+                            className="
+                                text-xs px-4 py-2 rounded
+                                bg-purple-600 hover:bg-purple-500
+                                text-white font-medium transition-colors
+                            "
+                        >
+                            + Markdown cell
+                        </button>
+                    </div>
                 </div>
             ) : (
                 <div className="p-6 flex flex-col gap-4 max-w-4xl mx-auto">
-                    {cells.map((cell) => (
-                        <SqlCell key={cell.id} cell={cell} />
-                    ))}
-                    <button
-                        onClick={addCell}
-                        className="
-                            w-full py-2 rounded-lg
-                            border border-dashed border-gray-300 dark:border-gray-700
-                            text-xs text-gray-400 dark:text-gray-600
-                            hover:border-blue-400 dark:hover:border-blue-600
-                            hover:text-blue-500 dark:hover:text-blue-400
-                            transition-colors
-                        "
-                    >
-                        + Add cell
-                    </button>
+                    {cells.map((cell) =>
+                        cell.type === 'markdown' ? (
+                            <MarkdownCell key={cell.id} cell={cell} />
+                        ) : (
+                            <SqlCell key={cell.id} cell={cell} />
+                        )
+                    )}
+                    <AddCellBar />
                 </div>
             )}
         </main>
