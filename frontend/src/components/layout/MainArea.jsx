@@ -1,16 +1,14 @@
-import useCellStore   from '../../store/useCellStore.js'
-import useSidebarStore from '../../store/useSidebarStore.js'
-import SqlCell         from '../cell/SqlCell.jsx'
+import useCellStore from '../../store/useCellStore.js'
+import SqlCell from '../cell/SqlCell.jsx'
 
 function MainArea() {
-    const { cells, addCell }  = useCellStore()
-    const { isOpen: sidebar } = useSidebarStore()
+    const { cells, addCell } = useCellStore()
 
     return (
         <main
             // Zoom is handled by useZoomStore writing to document.documentElement font-size
-            // Sidebar offset uses a CSS variable set by Sidebar.jsx on resize
-            style={{ left: sidebar ? 'var(--sidebar-width, 288px)' : 0 }}
+            // Always offset by at least the rail; panel width is added via --sidebar-width
+            style={{ left: 'var(--sidebar-width, 40px)' }}
             className="
                 absolute top-12 bottom-10 right-0 overflow-y-auto
                 bg-gray-50 dark:bg-gray-950
@@ -41,7 +39,7 @@ function MainArea() {
                 </div>
             ) : (
                 <div className="p-6 flex flex-col gap-4 max-w-4xl mx-auto">
-                    {cells.map(cell => (
+                    {cells.map((cell) => (
                         <SqlCell key={cell.id} cell={cell} />
                     ))}
                     <button

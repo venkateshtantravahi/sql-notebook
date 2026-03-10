@@ -1,7 +1,11 @@
 {
-  "name": "frontend",
+  "name": "sql-notebook",
+  "version": "0.1.0",
+  "description": "A lightweight SQL notebook for querying multiple databases from a single interface",
+  "author": "venkateshtantravahi",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/venkateshtantravahi/sql-notebook",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

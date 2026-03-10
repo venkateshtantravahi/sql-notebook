@@ -1,18 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 
-/**
- * Fetches schema for all known namespaces.
- * Flow: GET /namespaces → for each namespace GET /schema/:namespace
- *
- * Re-fetches automatically when the 'namespace-added' event fires
- * (dispatched by ConfigModal after a successful connection and by
- * Sidebar after a delete), so the schema tree stays in sync with
- * the live registry without needing a page refresh.
- */
+// useSchema — fetches schema for all known namespaces.
+// Flow: GET /namespaces → GET /schema/:namespace for each.
+// Re-fetches on 'namespace-added' event so the tree stays in sync without a page refresh.
 function useSchema() {
-    const [schema, setSchema]   = useState([])
+    const [schema, setSchema] = useState([])
     const [loading, setLoading] = useState(true)
-    const [error, setError]     = useState(null)
+    const [error, setError] = useState(null)
 
     const load = useCallback(async () => {
         let cancelled = false
@@ -27,7 +21,7 @@ function useSchema() {
 
             // /namespaces now returns health objects [{name, healthy, latencyMs}]
             // Extract just the name strings for schema fetching
-            const namespaces = raw.map(ns => (typeof ns === 'string' ? ns : ns.name))
+            const namespaces = raw.map((ns) => (typeof ns === 'string' ? ns : ns.name))
 
             if (namespaces.length === 0) {
                 setSchema([])
@@ -35,8 +29,8 @@ function useSchema() {
             }
 
             const results = await Promise.allSettled(
-                namespaces.map(name =>
-                    fetch(`/schema/${name}`).then(r => {
+                namespaces.map((name) =>
+                    fetch(`/schema/${name}`).then((r) => {
                         if (!r.ok) throw new Error(`Failed to fetch schema for ${name}`)
                         return r.json()
                     })
@@ -60,7 +54,9 @@ function useSchema() {
             if (!cancelled) setLoading(false)
         }
 
-        return () => { cancelled = true }
+        return () => {
+            cancelled = true
+        }
     }, [])
 
     // Fetch on mount
