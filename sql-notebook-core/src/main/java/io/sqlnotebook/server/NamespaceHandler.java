@@ -33,15 +33,25 @@ public class NamespaceHandler extends HttpServlet {
 
     private static final int PING_TIMEOUT_MS = 3000;
 
+    private static final int MAX_PING_THREADS = 20;
+
     private final ConnectionRegistry registry;
     private final ObjectMapper mapper = new ObjectMapper();
-    private  final ExecutorService executor = Executors.newCachedThreadPool();
+    /* Bounded pool — prevents unbounded thread growth when many namespaces are registered */
+    private final ExecutorService executor = Executors.newFixedThreadPool(MAX_PING_THREADS);
 
     public NamespaceHandler(ConnectionRegistry registry) {
         this.registry = registry;
     }
 
-
+    /**
+     * Returns health status for all registered namespaces.
+     * Pings each namespace in parallel with a per-namespace timeout so a single
+     * unreachable database does not stall the entire response.
+     *
+     * <p>Query parameter {@code all=true} includes ephemeral (file/remote) sources.
+     * Without it, only persistent connections are returned.
+     */
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
@@ -51,7 +61,7 @@ public class NamespaceHandler extends HttpServlet {
                 .filter(ns -> all || !registry.isEphemeral(ns))
                 .collect(java.util.stream.Collectors.toSet());
 
-        //ping all namespaces in parllel
+        // Ping all namespaces in parallel
         List<Future<Map<String, Object>>> futures = new ArrayList<>();
         for (String ns: namespaces) {
             futures.add(executor.submit(() -> ping(ns)));

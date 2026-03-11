@@ -3,6 +3,7 @@ package io.sqlnotebook.connection;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import io.sqlnotebook.config.ConnectionConfig;
+import io.sqlnotebook.connection.JdbcUrlBuilder;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -151,7 +152,7 @@ public class ConnectionRegistry {
         ephemeralNamespaces.clear();
     }
 
-    // ── private helpers ───────────────────────────────────────────────────────
+    /* private helpers */
 
     private HikariDataSource buildPool(ConnectionConfig config) {
         return new HikariDataSource(buildHikariConfig(config));
@@ -159,41 +160,17 @@ public class ConnectionRegistry {
 
     private HikariConfig buildHikariConfig(ConnectionConfig config) {
         HikariConfig hikari = new HikariConfig();
-        hikari.setJdbcUrl(buildJdbcUrl(config));
+        hikari.setJdbcUrl(JdbcUrlBuilder.buildUrl(config));
         hikari.setPoolName("pool-" + config.namespace());
         hikari.setMaximumPoolSize(config.poolSize());
 
-        // SQLite uses file-based auth — no username/password
-        if (!config.type().equals("sqlite")) {
-            hikari.setUsername(config.username());
-            hikari.setPassword(config.password());
-        }
-
-        if (!"duckdb".equals(config.type())) {
+        // SQLite and DuckDB use file-based access — no username/password required
+        boolean needsAuth = !config.type().equals("sqlite") && !config.type().equals("duckdb");
+        if (needsAuth) {
             hikari.setUsername(config.username());
             hikari.setPassword(config.password());
         }
 
         return hikari;
-    }
-
-    private String buildJdbcUrl(ConnectionConfig config) {
-        return switch (config.type()) {
-            case "mysql" ->
-                    "jdbc:mysql://%s:%d/%s".formatted(config.host(), config.port(), config.database());
-            case "postgresql" ->
-                    "jdbc:postgresql://%s:%d/%s".formatted(config.host(), config.port(), config.database());
-            case "oracle" ->
-                    "jdbc:oracle:thin:@//%s:%d/%s".formatted(config.host(), config.port(), config.database());
-            case "sqlite" ->
-                    "jdbc:sqlite:%s".formatted(config.database());
-            case "duckdb"   -> "jdbc:duckdb:%s"
-                    .formatted(config.database());
-            case "microsoft-sql-server" ->
-                    "jdbc:sqlserver://%s:%d;databaseName=%s;trustServerCertificate=true"
-                            .formatted(config.host(), config.port(), config.database());
-            default ->
-                    throw new ConnectionRegistryException("Unsupported database type: " + config.type());
-        };
     }
 }

@@ -1,42 +1,15 @@
-import { TbFileTypeCsv, TbFileArrowRight, TbFileDatabase } from 'react-icons/tb'
-import { BsFiletypeJson, BsFiletypeXlsx } from 'react-icons/bs'
-import { LuFileJson } from 'react-icons/lu'
-import { FaRegFileAlt, FaRegFolderOpen } from 'react-icons/fa'
-import { SiApacheparquet } from 'react-icons/si'
-import { CgFileRemove } from 'react-icons/cg'
 import { useEffect, useRef, useState } from 'react'
-import useFileSourceModalStore from '../../store/useFileSourceModalStore.js'
-import { MdDone, MdOutlineCancel, MdOutlineFilePresent } from 'react-icons/md'
-import { IoIosDoneAll, IoMdArrowDropdown } from 'react-icons/io'
+import { FaRegFolderOpen } from 'react-icons/fa'
+import { CgFileRemove } from 'react-icons/cg'
+import { MdOutlineCancel } from 'react-icons/md'
+import { IoMdArrowDropdown } from 'react-icons/io'
 import { IoGlobeOutline } from 'react-icons/io5'
-
-function Field({ label, error, children }) {
-    return (
-        <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-600 dark:text-white">{label}</label>
-            {children}
-            {error && <span className="text-xs text-red-500 dark:text-red-400">{error}</span>}
-        </div>
-    )
-}
-
-function Input({ className = '', ...props }) {
-    return (
-        <input
-            className={`
-            w-full px-3 py-2 rounded text-sm font-mono
-            bg-gray-50 dark:bg-gray-800
-            border border-gray-200 dark:border-gray-700
-            text-gray-800 dark:text-gray-100
-            placeholder-gray-300 dark:placeholder-gray-600
-            focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400
-            focus:border-transparent transition-colors
-            ${className}
-        `}
-            {...props}
-        />
-    )
-}
+import { LuFileText } from 'react-icons/lu'
+import useFileSourceModalStore from '../../store/useFileSourceModalStore.js'
+import { Field, Input } from '../common/FormField.jsx'
+import { StatusMessage } from '../common/StatusMessage.jsx'
+import { getFileIcon, formatFileSize } from '../../utils/fileUtils.jsx'
+import { useEscapeKey } from '../../hooks/useEscapeKey.js'
 
 // accepted file types
 const ACCEPTED_EXTS = ['.csv', '.tsv', '.json', '.ndjson', '.parquet', '.arrow', '.xlsx', '.db']
@@ -49,28 +22,6 @@ const ACCEPTED_MIME = [
     'application/vnd.apache.parquet',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ].join(',')
-
-function extIcon(filename) {
-    const ext = filename?.split('.').pop()?.toLowerCase()
-    const icons = {
-        csv: <TbFileTypeCsv className="text-green-600 dark:text-green-400" />,
-        tsv: <FaRegFileAlt className="text-gray-500 dark:text-gray-400" />,
-        json: <BsFiletypeJson className="text-yellow-600 dark:text-yellow-400" />,
-        ndjson: <LuFileJson className="text-yellow-600 dark:text-yellow-400" />,
-        parquet: <SiApacheparquet className="text-purple-600 dark:text-purple-400" />,
-        arrow: <TbFileArrowRight className="text-orange-500 dark:text-orange-400" />,
-        xlsx: <BsFiletypeXlsx className="text-emerald-600 dark:text-emerald-400" />,
-        xls: <BsFiletypeXlsx className="text-emerald-600 dark:text-emerald-400" />,
-        db: <TbFileDatabase className="text-blue-600 dark:text-blue-400" />,
-    }
-    return icons[ext] ?? <FaRegFolderOpen className="text-gray-500 dark:text-gray-400" />
-}
-
-function formatBytes(bytes) {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
 
 // Local files
 
@@ -121,16 +72,16 @@ function LocalFileTab({ onSuccess }) {
             const data = await res.json()
             if (res.status === 201) {
                 setStatus('success')
-                setStatusMsg(<MdDone /> + `Registered as namespace "${data.namespace}"`)
+                setStatusMsg(`Registered as namespace "${data.namespace}"`)
                 window.dispatchEvent(new CustomEvent('namespace-added'))
                 onSuccess?.()
             } else {
                 setStatus('error')
-                setStatusMsg(<MdOutlineCancel /> + (data.error ?? 'Upload failed'))
+                setStatusMsg(data.error ?? 'Upload failed')
             }
         } catch {
             setStatus('error')
-            setStatusMsg(<MdOutlineCancel /> + 'Could not reach backend')
+            setStatusMsg('Could not reach backend')
         }
     }
 
@@ -172,12 +123,12 @@ function LocalFileTab({ onSuccess }) {
 
                 {file ? (
                     <div className="flex flex-col items-center gap-1 px-4 py-2 text-center">
-                        <span className="text-3xl">{extIcon(file.name)}</span>
+                        <span className="text-3xl">{getFileIcon(file.name)}</span>
                         <span className="text-sm font-mono text-gray-800 dark:text-gray-100 font-medium">
                             {file.name}
                         </span>
                         <span className="text-xs text-gray-400 dark:text-gray-500">
-                            {formatBytes(file.size)}
+                            {formatFileSize(file.size)}
                         </span>
                         <button
                             onClick={(e) => {
@@ -207,20 +158,7 @@ function LocalFileTab({ onSuccess }) {
                 )}
             </div>
 
-            {/* Status message */}
-            {statusMsg && (
-                <div
-                    className={`text-xs px-3 py-2 rounded font-mono ${
-                        status === 'success'
-                            ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'
-                            : status === 'error'
-                              ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
-                              : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'
-                    }`}
-                >
-                    {statusMsg}
-                </div>
-            )}
+            <StatusMessage status={status} message={statusMsg} />
 
             {/* Upload button */}
             <button
@@ -232,15 +170,11 @@ function LocalFileTab({ onSuccess }) {
                     disabled:opacity-40 disabled:cursor-not-allowed
                 "
             >
-                {status === 'uploading' ? (
-                    'Uploading…'
-                ) : status === 'success' ? (
-                    <>
-                        <IoIosDoneAll /> Uploaded
-                    </>
-                ) : (
-                    'Upload File'
-                )}
+                {status === 'uploading'
+                    ? 'Uploading…'
+                    : status === 'success'
+                      ? 'Uploaded'
+                      : 'Upload File'}
             </button>
         </div>
     )
@@ -318,16 +252,16 @@ function RemoteSourceTab({ onSuccess }) {
             const data = await res.json()
             if (res.status === 201) {
                 setStatus('success')
-                setStatusMsg(<IoIosDoneAll /> + ` Registered as namespace "${data.namespace}"`)
+                setStatusMsg(`Registered as namespace "${data.namespace}"`)
                 window.dispatchEvent(new CustomEvent('namespace-added'))
                 onSuccess?.()
             } else {
                 setStatus('error')
-                setStatusMsg(<MdOutlineCancel /> + (data.error ?? 'Failed to add remote source'))
+                setStatusMsg(data.error ?? 'Failed to add remote source')
             }
         } catch {
             setStatus('error')
-            setStatusMsg(<MdOutlineCancel /> + ' Could not reach backend')
+            setStatusMsg('Could not reach backend')
         }
     }
 
@@ -368,12 +302,10 @@ function RemoteSourceTab({ onSuccess }) {
                 >
                     <span>
                         S3 / MinIO credentials{' '}
-                        {isS3 ? (
+                        {isS3 && (
                             <span className="text-blue-500 dark:text-blue-400 ml-1">
                                 (recommended for s3://)
                             </span>
-                        ) : (
-                            ''
                         )}
                     </span>
                     <span
@@ -425,20 +357,7 @@ function RemoteSourceTab({ onSuccess }) {
                 )}
             </div>
 
-            {/* Status */}
-            {statusMsg && (
-                <div
-                    className={`text-xs px-3 py-2 rounded font-mono ${
-                        status === 'success'
-                            ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'
-                            : status === 'error'
-                              ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
-                              : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'
-                    }`}
-                >
-                    {statusMsg}
-                </div>
-            )}
+            <StatusMessage status={status} message={statusMsg} />
 
             <button
                 onClick={handleAdd}
@@ -452,7 +371,7 @@ function RemoteSourceTab({ onSuccess }) {
                 {status === 'adding'
                     ? 'Adding…'
                     : status === 'success'
-                      ? <MdDone /> + ' Added'
+                      ? 'Added'
                       : 'Add Remote Source'}
             </button>
         </div>
@@ -462,9 +381,14 @@ function RemoteSourceTab({ onSuccess }) {
 // Main modal
 
 const TABS = [
-    { id: 'local', label: <MdOutlineFilePresent /> + ' Local File' },
-    { id: 'remote', label: <IoGlobeOutline /> + ' Remote Source' },
+    { id: 'local', label: 'Local File' },
+    { id: 'remote', label: 'Remote Source' },
 ]
+
+const TAB_ICONS = {
+    local: <LuFileText className="inline mr-1" />,
+    remote: <IoGlobeOutline className="inline mr-1" />,
+}
 
 function FileSourceModal() {
     const { isOpen, close } = useFileSourceModalStore()
@@ -475,14 +399,7 @@ function FileSourceModal() {
         if (isOpen) setActiveTab('local')
     }, [isOpen])
 
-    useEffect(() => {
-        if (!isOpen) return
-        const handle = (e) => {
-            if (e.key === 'Escape') close()
-        }
-        document.addEventListener('keydown', handle)
-        return () => document.removeEventListener('keydown', handle)
-    }, [isOpen, close])
+    useEscapeKey(isOpen, close)
 
     function handleOverlayClick(e) {
         if (e.target === overlayRef.current) close()
@@ -503,7 +420,7 @@ function FileSourceModal() {
         >
             <div
                 className="
-                w-full max-w-lg bg-white dark:bg-gray-900
+                w-full max-w-lg bg-white dark:bg-[#161f2e]
                 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700
                 flex flex-col max-h-[90vh]
             "
@@ -541,6 +458,7 @@ function FileSourceModal() {
                                 }
                             `}
                         >
+                            {TAB_ICONS[tab.id]}
                             {tab.label}
                         </button>
                     ))}

@@ -73,10 +73,10 @@ function HealthDot({ ns }) {
                 ${healthy ? 'bg-emerald-400' : 'bg-red-400 animate-pulse'}
             `}
             />
-            <span className="text-xs font-mono text-gray-500 dark:text-amber-50">
+            <span className="text-xs font-mono text-gray-500 dark:text-gray-300">
                 {nsObj.name}
                 {nsObj.latencyMs != null && (
-                    <span className="ml-1 text-gray-400 dark:text-gray-50 tabular-nums">
+                    <span className="ml-1 text-gray-400 dark:text-gray-500 tabular-nums">
                         {nsObj.latencyMs}ms
                     </span>
                 )}
@@ -115,13 +115,13 @@ function BottomBar() {
             border-t border-gray-200 dark:border-gray-800
         "
         >
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-white flex-shrink-0">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 flex-shrink-0">
                 Namespace Health
             </span>
 
             <div className="flex items-center gap-5 flex-1 min-w-0">
                 {namespaces.length === 0 ? (
-                    <span className="text-xs text-gray-300 dark:text-white italic">
+                    <span className="text-xs text-gray-300 dark:text-gray-600 italic">
                         No connections configured
                     </span>
                 ) : (
@@ -131,7 +131,7 @@ function BottomBar() {
                 )}
             </div>
 
-            <span className="text-xs font-mono text-gray-300 dark:text-amber-50 flex-shrink-0">
+            <span className="text-xs font-mono text-gray-300 dark:text-gray-600 flex-shrink-0">
                 v{pkg.version}
             </span>
         </footer>

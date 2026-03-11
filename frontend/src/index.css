@@ -43,30 +43,33 @@
     --color-border:         #e5e7eb;   /* gray-200 in light */
     --color-surface:        #ffffff;
     --color-surface-raised: #f9fafb;   /* gray-50 in light */
+    --color-card:           #ffffff;   /* card/modal bg in light */
+    --color-card-toolbar:   #f3f4f6;   /* toolbar within cards in light */
   }
 
   .dark {
-    /* Primary body text — was gray-300 (#d1d5db), now near-white */
+    /* Primary body text — near-white, no amber tint */
     --color-text-primary:   #f1f5f9;   /* slate-100 */
 
     /* Secondary text — labels, namespace names, column names */
-    /* was gray-400 (#9ca3af) — nearly invisible on gray-900 */
     --color-text-secondary: #cbd5e1;   /* slate-300 */
 
     /* Muted text — section headers, hints, placeholders */
-    /* was gray-500 (#6b7280) — failed WCAG AA */
     --color-text-muted:     #94a3b8;   /* slate-400 */
 
     /* Faint text — version numbers, disabled states */
-    /* was gray-600/700 — invisible */
     --color-text-faint:     #64748b;   /* slate-500 */
 
-    /* Borders — slightly brighter than default gray-800 */
-    --color-border:         #2d3748;
+    /* Borders */
+    --color-border:         #1e293b;   /* slate-800 */
 
-    /* Surfaces */
+    /* App shell (header, sidebar, footer) */
     --color-surface:        #111827;   /* gray-900 */
     --color-surface-raised: #1f2937;   /* gray-800 */
+
+    /* Cards — lifted off shell so cells/modals are visible against the page */
+    --color-card:           #161f2e;
+    --color-card-toolbar:   #1a2540;
   }
 
   /* Scrollbar — lighter thumb in dark mode */

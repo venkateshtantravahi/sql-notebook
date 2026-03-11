@@ -1,0 +1,124 @@
+= Draft Persistence
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: rouge
+
+== Overview
+
+The draft handler persists the active notebook state to disk so it survives browser refreshes and application restarts. It uses an atomic write strategy and a rotating backup ring to protect against data loss from mid-write crashes or corrupt files.
+
+== Storage Layout
+
+[source]
+----
+~/.sqlnotebook/
+  drafts/
+    current.sqlnb          ← always the latest saved draft
+    current.sqlnb.tmp      ← exists only during an atomic write, cleaned up immediately
+  backups/
+    current_20260301T120000.sqlnb
+    current_20260302T093015.sqlnb
+    ...                    ← up to 20 backups, oldest deleted automatically
+----
+
+== Endpoints
+
+=== GET /draft
+
+Returns the current notebook draft as JSON. The response body is the raw file content — no re-serialisation.
+
+[cols="1,3"]
+|===
+| Status | Meaning
+
+| `200 OK`
+| Draft found and valid. Body is the notebook JSON.
+
+| `404 Not Found`
+| No draft exists yet (first launch). Frontend starts a blank notebook.
+
+| `204 No Content`
+| Draft file exists but is corrupt, and no backup is available either.
+|===
+
+If the draft file exists but fails JSON validation (corrupt write), the handler automatically falls back to the most recent backup before returning `204`. The fallback is transparent — the client receives the backup contents with status `200`.
+
+'''
+
+=== POST /draft
+
+Saves the full notebook state.
+
+==== Request
+
+The body must be valid JSON and must contain a `version` field. The version field is reserved for future format migration — it is validated on receipt but not currently used for transformation.
+
+[source,json]
+----
+{
+  "version": "1",
+  "title": "My Analysis",
+  "cells": [
+    {
+      "id":        "cell-1",
+      "type":      "sql",
+      "namespace": "prod_pg",
+      "query":     "SELECT * FROM users LIMIT 10"
+    },
+    {
+      "id":      "cell-2",
+      "type":    "markdown",
+      "content": "## Notes\nThis shows the user table."
+    }
+  ]
+}
+----
+
+Result sets are deliberately excluded from the draft. They are always stale on reload and reproducible by re-running the query.
+
+==== Response
+
+[source,json]
+----
+{ "saved": true, "savedAt": "2026-03-01T12:00:00Z" }
+----
+
+Returns `400` if the body is not valid JSON or if the `version` field is missing.
+Returns `500` if the filesystem write fails.
+
+== Write Strategy
+
+Every save follows this sequence:
+
+[source]
+----
+POST /draft
+  │
+  ├── Validate JSON + version field
+  ├── ensureDirectories()         ← create drafts/ and backups/ if absent
+  ├── rotateBefore()              ← copy current.sqlnb → backups/current_<ts>.sqlnb
+  ├── atomicWrite()               ← write to current.sqlnb.tmp, rename → current.sqlnb
+  └── pruneBackups()              ← delete oldest if count exceeds 20
+----
+
+The rename step (`Files.move` with `ATOMIC_MOVE`) is the key guarantee: at any point in time the draft file either contains the previous version or the new version — never a partial write. If the process is killed between `tmp` creation and rename, the old draft is intact and the `.tmp` file is orphaned (it is overwritten on the next save).
+
+== Backup Ring
+
+Up to 20 backups are kept. Backup filenames are timestamp-based (`current_yyyyMMdd'T'HHmmss.sqlnb` in UTC), so they sort chronologically by name. When the count exceeds 20, the oldest files are deleted first.
+
+The backup ring protects against:
+
+* Corrupt drafts from unexpected process termination
+* Accidental notebook state overwrites (e.g. the user closes a tab they wanted to keep)
+
+== Read Fallback on Corruption
+
+On `GET /draft`, the handler first attempts to read and JSON-validate the primary draft file. If that fails:
+
+* **I/O failure** (e.g. file deleted mid-read) → immediately falls back to latest backup
+* **JSON parse failure** (corrupt content) → falls back to latest backup
+* **No backup available** → returns `204 No Content`
+
+The two failure types are handled separately so an I/O error does not get misdiagnosed as JSON corruption.

@@ -1,92 +1,178 @@
 = Connection Registry
 :toc: left
 :toclevels: 3
-:source-highlighter: highlight.js
+:sectnums:
+:source-highlighter: rouge
 
 == Overview
 
-The Connection Registry takes parsed `ConnectionConfig` objects from the Config Parser and creates one HikariCP connection pool per namespace. It is the single source of truth for all database connections in `sql-notebook`.
+The Connection Registry owns all HikariCP connection pools for the lifetime of the application.
+It is the single source of truth for which database namespaces are active and hands out JDBC connections on demand.
+
+Two categories of namespaces exist:
+
+* **Persistent** — defined in `sql.properties`, managed by `ConnectionHandler`. Survive restarts.
+* **Ephemeral** — created at runtime by `DuckDbRegistrar` for uploaded files and remote URLs. Tracked in `sources.json`. The registry flags these so `ConnectionHandler`'s DELETE endpoint knows not to write them back to `sql.properties`.
+
+Thread safety: all pool and ephemeral-namespace maps use `ConcurrentHashMap`, so hot-add and hot-remove from handler threads are safe under concurrent reads from `QueryExecutor`.
 
 == Classes
 
 === `ConnectionRegistry`
 
-Holds one `HikariDataSource` per namespace and hands out connections on demand.
-
 [source,java]
 ----
+// Startup — initialise from config
 ConnectionRegistry registry = new ConnectionRegistry(configs);
-Connection conn = registry.getConnection("prod_mysql");
+
+// Runtime — add a persistent connection
+registry.register(config);
+
+// Runtime — add an ephemeral (file/remote) connection
+registry.registerEphemeral(config);
+
+// Get a live connection
+Connection conn = registry.getConnection("prod_pg");
+
+// Check existence
+boolean exists = registry.hasNamespace("prod_pg");
+boolean ephemeral = registry.isEphemeral("sales_csv");
+
+// Remove and close pool
+registry.deregister("old_ns");
+
+// Shutdown — close all pools on app exit
+registry.shutdown();
 ----
 
 ==== Methods
 
-[cols="2,2"]
+[cols="2,3"]
 |===
-|Method |Description
+| Method | Description
 
-|`getConnection(namespace)` |Returns a live connection from the namespace pool
-|`getNamespaces()` |Returns all registered namespace names
-|`shutdown()` |Closes all pools cleanly
+| `register(config)`
+| Hot-register a persistent namespace. Throws `ConnectionRegistryException` if the namespace already exists.
+
+| `registerEphemeral(config)`
+| Same as `register` but marks the namespace as ephemeral. Used exclusively by `DuckDbRegistrar`.
+
+| `deregister(namespace)`
+| Removes the namespace and closes its pool. Safe to call concurrently — pool is closed after removal from the map.
+
+| `getConnection(namespace)`
+| Returns a live `Connection` from the namespace pool. Caller must close it (use try-with-resources).
+
+| `getNamespaces()`
+| Returns an unmodifiable view of all registered namespace names.
+
+| `hasNamespace(namespace)`
+| Returns `true` if the namespace is registered.
+
+| `isEphemeral(namespace)`
+| Returns `true` if the namespace was registered via `registerEphemeral`.
+
+| `validateNamespace(namespace)`
+| Throws `ConnectionRegistryException` if the namespace is not registered. Used by `QueryExecutor` before submitting work.
+
+| `shutdown()`
+| Closes all pools and clears the registry. Called once during application shutdown.
 |===
+
+=== `JdbcUrlBuilder`
+
+A shared utility that builds JDBC URLs and loads driver classes. Extracted from the registry to avoid duplication with `ConnectionHandler`.
+
+[source,java]
+----
+String url = JdbcUrlBuilder.buildUrl(config);
+JdbcUrlBuilder.loadDriver("postgresql"); // for DriverManager-based test connections
+----
+
+Both methods switch on `config.type()` and throw `IllegalArgumentException` for unsupported types.
 
 === `ConnectionRegistryException`
 
-Thrown when a namespace is unknown or a connection cannot be established.
+Unchecked exception thrown for:
+
+* Unknown namespace on `getConnection`, `deregister`, or `validateNamespace`
+* Duplicate namespace on `register`
+* HikariCP failure to create a connection
 
 == JDBC URL Formats
 
-Each database type maps to a specific JDBC URL format internally:
-
 [cols="1,2"]
 |===
-|Type |JDBC URL Format
+| Type | JDBC URL pattern
 
-|`mysql` |`jdbc:mysql://host:port/database`
-|`postgres` |`jdbc:postgresql://host:port/database`
-|`oracle` |`jdbc:oracle:thin:@//host:port/service_name`
-|`sqlite` |`jdbc:sqlite:path/to/file.db`
-|`microsoft-sql-server` |`jdbc:sqlserver://host:port;databaseName=db;trustServerCertificate=true`
+| `mysql`
+| `jdbc:mysql://host:port/database`
+
+| `postgresql`
+| `jdbc:postgresql://host:port/database`
+
+| `oracle`
+| `jdbc:oracle:thin:@//host:port/service_name`
+
+| `microsoft-sql-server`
+| `jdbc:sqlserver://host:port;databaseName=database;trustServerCertificate=true`
+
+| `sqlite`
+| `jdbc:sqlite:path/to/file.db`
+
+| `duckdb`
+| `jdbc:duckdb:path/to/namespace.db`
 |===
 
 == Connection Pooling
 
-Each namespace gets its own isolated HikariCP pool. Pool size is controlled per namespace via `sql.properties`.
+Each namespace has an isolated `HikariDataSource`. Pools never share connections — one namespace exhausting its pool cannot block another.
 
-[source,properties]
-----
-db.prod_mysql.pool.size=5
-----
+Pool size is fixed at `5` for all namespaces (set in `ConnectionConfig` by `ConfigParser` and `ConnectionHandler`). HikariCP closes idle connections automatically and detects leaks if a connection is held for more than the leak detection timeout.
 
-If not specified, defaults to `5`.
+Credentials are set on the Hikari config only for database types that require authentication. SQLite and DuckDB are file-based and skip the `setUsername`/`setPassword` calls entirely.
 
-== Error Handling
+== Adding a New Database Type
 
-[cols="2,2"]
-|===
-|Scenario |Exception Message
-
-|Unknown namespace |`Unknown namespace: <namespace>`
-|DB unreachable |`Failed to get connection for namespace: <namespace>`
-|Unsupported type |`Unsupported type: <type>`
-|===
+1. Add the type string to `SUPPORTED_TYPES` in `ConfigParser` and `ConnectionHandler`
+2. Add the JDBC URL branch in `JdbcUrlBuilder.buildUrl()`
+3. Add the driver class name in `JdbcUrlBuilder.loadDriver()`
+4. Add the JDBC driver dependency in `build.gradle.kts`
+5. Add a Testcontainers module in `build.gradle.kts` (test scope)
+6. Add an integration test in `ConnectionRegistryTest`
+7. Update this file and `config-parser.adoc`
 
 == Tests
 
 Located at `src/test/java/io/sqlnotebook/connection/ConnectionRegistryTest.java`
 
-Uses **Testcontainers** to spin up real database instances per test run.
+Uses Testcontainers to spin up real database instances. All container-based tests require a running Docker daemon.
 
-[cols="2,2"]
+[cols="2,3"]
 |===
-|Test |What it validates
+| Test | What it validates
 
-|`shouldConnectToMysqlNamespace` |MySQL pool returns valid connection
-|`shouldConnectToPostgresNamespace` |Postgres pool returns valid connection
-|`shouldConnectToMssqlNamespace` |MSSQL pool returns valid connection
-|`shouldConnectToOracleNamespace` |Oracle pool returns valid connection
-|`shouldConnectToSqliteNamespace` |SQLite file-based connection works
-|`shouldConnectToBothMysqlAndPostgresIndependently` |Two namespaces are isolated
-|`shouldThrowForUnknownNamespace` |Unknown namespace gives meaningful error
-|`shouldShutdownCleanly` |All pools close without errors
+| `shouldConnectToMysqlNamespace`
+| MySQL pool returns a valid, live connection
+
+| `shouldConnectToPostgresNamespace`
+| PostgreSQL pool returns a valid connection
+
+| `shouldConnectToMssqlNamespace`
+| SQL Server pool returns a valid connection
+
+| `shouldConnectToOracleNamespace`
+| Oracle pool returns a valid connection
+
+| `shouldConnectToSqliteNamespace`
+| SQLite file-based connection works without credentials
+
+| `shouldConnectToBothMysqlAndPostgresIndependently`
+| Two namespaces are completely isolated from each other
+
+| `shouldThrowForUnknownNamespace`
+| `getConnection` on a missing namespace throws with the namespace name in the message
+
+| `shouldShutdownCleanly`
+| `shutdown()` closes all pools without errors or exceptions
 |===

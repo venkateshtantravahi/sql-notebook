@@ -1,0 +1,123 @@
+= Schema Introspection
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: rouge
+
+== Overview
+
+The schema endpoint returns table and column metadata for a registered namespace, including primary key and foreign key relationships. The frontend uses this data to render the sidebar tree and draw ERD-style relationship lines.
+
+Schema fetching is read-only and uses the database's own system tables — no extra schema tracking is maintained by the application.
+
+== Endpoint
+
+[source]
+----
+GET /schema/:namespace
+----
+
+=== Response Shape
+
+[source,json]
+----
+{
+  "namespace": "prod_pg",
+  "tables": [
+    {
+      "name": "orders",
+      "columns": [
+        { "name": "id",         "type": "INTEGER", "primaryKey": true,  "foreignKey": false },
+        { "name": "customer_id","type": "INTEGER", "primaryKey": false, "foreignKey": true,
+          "referencedTable": "customers", "referencedColumn": "id" },
+        { "name": "total",      "type": "NUMERIC", "primaryKey": false, "foreignKey": false }
+      ]
+    }
+  ]
+}
+----
+
+`referencedTable` and `referencedColumn` are only present when `foreignKey` is `true`.
+
+=== Error Responses
+
+[cols="1,3"]
+|===
+| Status | Cause
+
+| `400`
+| No namespace in path (use `/schema/{namespace}`)
+
+| `404`
+| Unknown namespace, or namespace is an ephemeral file/remote source (schema not available — query the view directly)
+
+| `500`
+| JDBC error during introspection
+|===
+
+== Per-Database Behaviour
+
+Schema introspection varies significantly by database. `SchemaHandler` detects the connected database type from JDBC metadata and routes to the appropriate implementation.
+
+=== MySQL, PostgreSQL, SQL Server (INFORMATION_SCHEMA)
+
+All three support the standard `INFORMATION_SCHEMA` views. The schema context (the set of tables to introspect) is determined differently per database:
+
+* **PostgreSQL**: uses `conn.getSchema()` (defaults to `public`)
+* **MySQL / SQL Server**: uses `conn.getCatalog()` (the database name)
+
+Foreign key resolution also differs:
+
+* **PostgreSQL**: requires a join through `REFERENTIAL_CONSTRAINTS` to follow the unique constraint chain
+* **MySQL / SQL Server**: the referenced table and column are directly on `KEY_COLUMN_USAGE`
+
+Both branches produce the same output shape — the difference is internal to `SchemaHandler`.
+
+=== SQLite
+
+SQLite does not implement `INFORMATION_SCHEMA`. Schema is fetched using SQLite PRAGMAs:
+
+[source,sql]
+----
+SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'
+PRAGMA table_info("orders")
+PRAGMA foreign_key_list("orders")
+----
+
+`PRAGMA table_info` returns column names, types, and primary key flags. `PRAGMA foreign_key_list` returns FK references — `from` is the local column, `table` is the referenced table, `to` is the referenced column.
+
+System tables (prefixed `sqlite_`) are excluded from results.
+
+=== Oracle
+
+Oracle uses its own data dictionary views instead of `INFORMATION_SCHEMA`:
+
+* `ALL_TAB_COLUMNS` — table and column metadata for the current user
+* `ALL_CONSTRAINTS` + `ALL_CONS_COLUMNS` — primary and foreign key relationships
+
+The schema scope is determined by the connection's username (uppercased). FK resolution follows `R`-type constraints to their `U`/`P`-type referenced constraint, then joins to `ALL_CONS_COLUMNS` to resolve the column name.
+
+=== DuckDB
+
+DuckDB exposes `information_schema.columns` but only for the `main` schema. Foreign keys are not supported — all FK and PK flags are always `false` for DuckDB namespaces.
+
+DuckDB schema introspection is primarily useful for inspecting views created over uploaded files. Column names and inferred types from the read function appear as regular columns.
+
+== Why Ephemeral Namespaces Return 404
+
+File and remote sources are registered as ephemeral namespaces. Their "schema" is a single view named after the namespace — there are no multiple tables to list. Rather than return a confusing single-entry response, the endpoint returns `404` for ephemeral sources. To explore a file source's columns, run:
+
+[source,sql]
+----
+SELECT * FROM sales_csv LIMIT 0
+----
+
+DuckDB's column inference is visible in the result set metadata.
+
+== Adding Schema Support for a New Database Type
+
+1. Add a detection branch in `SchemaHandler.fetchSchema()` based on `dbType` (from `getDatabaseProductName().toLowerCase()`)
+2. Implement a private `fetchXxxSchema(Connection conn)` method returning `List<Map<String, Object>>`
+3. Use `buildTableList(tableMap)` to convert the `tableName → columns` map to the standard output format
+4. Use the `FkRef` record for FK reference storage
+5. Update this file with the new database's behaviour notes

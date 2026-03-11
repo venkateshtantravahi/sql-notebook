@@ -39,6 +39,11 @@ public class SchemaHandler extends HttpServlet {
         this.registry = registry;
     }
 
+    /**
+     * GET /schema/{namespace} — returns all tables and columns for the given namespace.
+     * Dispatches to the appropriate schema fetcher based on the detected database type.
+     * Returns 400 if no namespace is provided, 404 if unknown or ephemeral.
+     */
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
@@ -83,10 +88,16 @@ public class SchemaHandler extends HttpServlet {
         }
     }
 
+    /** Returns the lowercase database product name from JDBC metadata (e.g. "postgresql", "sqlite"). */
     private String detectType(Connection conn) throws Exception {
         return conn.getMetaData().getDatabaseProductName().toLowerCase();
     }
 
+    /**
+     * Dispatches schema fetching to the appropriate implementation based on database type.
+     * SQLite and Oracle use proprietary system tables; DuckDB uses information_schema with
+     * restricted schema support; all others use the standard INFORMATION_SCHEMA queries.
+     */
     private List<Map<String, Object>> fetchSchema(Connection conn, String dbType) throws Exception {
         if (dbType.contains("sqlite")) {
             return fetchSqliteSchema(conn);

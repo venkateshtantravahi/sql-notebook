@@ -4,6 +4,7 @@ import io.sqlnotebook.config.ConfigParser;
 import io.sqlnotebook.config.ConnectionConfig;
 import io.sqlnotebook.connection.ConnectionRegistry;
 import io.sqlnotebook.connection.ConnectionRegistryException;
+import io.sqlnotebook.connection.JdbcUrlBuilder;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -195,7 +196,7 @@ public class ConnectionHandler extends HttpServlet {
 
     private void handleTest(ConnectionConfig config, HttpServletResponse resp) throws IOException {
         try {
-            loadDriver(config.type());
+            JdbcUrlBuilder.loadDriver(config.type());
         } catch (ClassNotFoundException e) {
             ObjectNode body = mapper.createObjectNode();
             body.put("success", false);
@@ -205,7 +206,7 @@ public class ConnectionHandler extends HttpServlet {
         }
 
         try (Connection conn = DriverManager.getConnection(
-                buildJdbcUrl(config), config.username(), config.password())) {
+                JdbcUrlBuilder.buildUrl(config), config.username(), config.password())) {
             conn.isValid(5);
             ObjectNode body = mapper.createObjectNode();
             body.put("success", true);
@@ -291,30 +292,6 @@ public class ConnectionHandler extends HttpServlet {
                 password,
                 5
         );
-    }
-
-    private void loadDriver(String type) throws ClassNotFoundException {
-        String driverClass = switch (type) {
-            case "mysql"                -> "com.mysql.cj.jdbc.Driver";
-            case "postgresql"           -> "org.postgresql.Driver";
-            case "oracle"               -> "oracle.jdbc.OracleDriver";
-            case "microsoft-sql-server" -> "com.microsoft.sqlserver.jdbc.SQLServerDriver";
-            case "sqlite"               -> "org.sqlite.JDBC";
-            default -> throw new ClassNotFoundException("No driver for type: " + type);
-        };
-        Class.forName(driverClass);
-    }
-
-    private String buildJdbcUrl(ConnectionConfig c) {
-        return switch (c.type()) {
-            case "mysql"                -> "jdbc:mysql://%s:%d/%s".formatted(c.host(), c.port(), c.database());
-            case "postgresql"           -> "jdbc:postgresql://%s:%d/%s".formatted(c.host(), c.port(), c.database());
-            case "oracle"               -> "jdbc:oracle:thin:@//%s:%d/%s".formatted(c.host(), c.port(), c.database());
-            case "microsoft-sql-server" -> "jdbc:sqlserver://%s:%d;databaseName=%s;trustServerCertificate=true"
-                    .formatted(c.host(), c.port(), c.database());
-            case "sqlite"               -> "jdbc:sqlite:%s".formatted(c.database());
-            default -> throw new IllegalArgumentException("Unsupported type: " + c.type());
-        };
     }
 
     private String friendlyError(String raw) {

@@ -1,4 +1,3 @@
-// suppress inspection "JsonStandardCompliance" for whole file
 = WebSocket Query Execution
 :toc: left
 :toclevels: 3
@@ -8,9 +7,9 @@
 == Overview
 
 The WebSocket module exposes a persistent, bi-directional connection at `ws://localhost:8080/ws/query`.
-It allows the notebook frontend to submit SQL queries and receive live status updates — without blocking or polling.
+It allows the notebook frontend to submit SQL queries and receive live status updates without blocking or polling.
 
-Unlike the `POST /query` HTTP endpoint (which blocks until the query finishes), the WebSocket endpoint immediately acknowledges receipt with a `running` message, then pushes the final result asynchronously when the query completes. Multiple cells can be in-flight simultaneously on a single connection.
+Unlike `POST /query` (which blocks until the query finishes), the WebSocket endpoint immediately pushes a `running` message, then pushes the final result asynchronously when the query completes. Multiple cells can be in-flight simultaneously on a single connection.
 
 == Endpoint
 
@@ -27,7 +26,7 @@ ws://localhost:8080/ws/query
 ----
 {
   "cellId":    "cell-1",
-  "namespace": "local",
+  "namespace": "prod_pg",
   "sql":       "SELECT id, name FROM users LIMIT 10"
 }
 ----
@@ -38,24 +37,24 @@ ws://localhost:8080/ws/query
 
 | `cellId`
 | String (required)
-| A unique identifier for the notebook cell. Echoed back in every response so the UI can route updates to the correct cell.
+| Unique identifier for the notebook cell. Echoed back in every response so the UI routes updates to the correct cell.
 
 | `namespace`
 | String (required)
-| The namespace name as defined in `sql.properties`.
+| Registered namespace name.
 
 | `sql`
 | String (required)
-| The SQL statement to execute.
+| SQL statement to execute.
 |===
 
 === Server → Browser (Outgoing)
 
-The server always sends two messages per query submission:
+The server always sends exactly two messages per query submission.
 
 ==== 1. Running (immediate)
 
-Sent immediately upon receiving the query, before execution begins.
+Sent before execution begins. The UI should show a spinner at this point.
 
 [source,json]
 ----
@@ -67,9 +66,9 @@ Sent immediately upon receiving the query, before execution begins.
 }
 ----
 
-==== 2. Done (on completion)
+==== 2. Done — success
 
-Sent when the query finishes successfully.
+Sent when the query completes successfully.
 
 [source,json]
 ----
@@ -77,22 +76,21 @@ Sent when the query finishes successfully.
   "cellId": "cell-1",
   "status": "done",
   "result": {
-    "namespace":      "local",
-    "sql":            "SELECT id, name FROM users LIMIT 10",
-    "columns":        ["id", "name"],
-    "rows":           [["1", "Alice"], ["2", "Bob"]],
+    "namespace":       "prod_pg",
+    "sql":             "SELECT id, name FROM users LIMIT 10",
+    "columns":         ["id", "name"],
+    "rows":            [["1", "Alice"], ["2", "Bob"]],
     "executionTimeMs": 38,
-    "success":        true,
-    "errorMessage":   null
+    "success":         true,
+    "errorMessage":    null
   },
   "error": null
 }
 ----
 
-==== 3. Done with SQL error (query failed at DB level)
+==== 3. Done — SQL error
 
-If the SQL is invalid or fails at the database, `status` is still `done` but `result.success` is `false`.
-This allows the UI to render the error inline in the cell without special-casing the message type.
+If the SQL is invalid or fails at the database level, `status` is still `done` but `result.success` is `false`. The UI renders the error inline in the cell — it does not need to branch on `status`.
 
 [source,json]
 ----
@@ -100,21 +98,21 @@ This allows the UI to render the error inline in the cell without special-casing
   "cellId": "cell-1",
   "status": "done",
   "result": {
-    "namespace":      "local",
-    "sql":            "SELECT * FROM nonexistent_table",
-    "columns":        [],
-    "rows":           [],
+    "namespace":       "prod_pg",
+    "sql":             "SELECT * FROM nonexistent_table",
+    "columns":         [],
+    "rows":            [],
     "executionTimeMs": 5,
-    "success":        false,
-    "errorMessage":   "ERROR: relation \"nonexistent_table\" does not exist"
+    "success":         false,
+    "errorMessage":    "ERROR: relation \"nonexistent_table\" does not exist"
   },
   "error": null
 }
 ----
 
-==== 4. Error (infrastructure-level failure)
+==== 4. Error — infrastructure failure
 
-Sent when the failure is not a SQL error but an infrastructure problem — unknown namespace, missing fields, malformed message.
+Sent when the failure is not a SQL error but an infrastructure problem: unknown namespace, missing fields, or a malformed message. No `running` message is sent before an infrastructure error.
 
 [source,json]
 ----
@@ -132,37 +130,40 @@ Sent when the failure is not a SQL error but an infrastructure problem — unkno
 |===
 | Condition | Response
 
-| Malformed JSON message
-| `error` response with `cellId: "unknown"` and parse error description
+| Malformed JSON
+| `error` with `cellId: "unknown"` and parse error description
 
-| Missing `namespace` or `sql` field
-| `error` response before any execution attempt
+| Missing `namespace` or `sql`
+| `error` before any execution attempt
 
 | Unknown namespace
-| `running` then `error` (executor throws `ConnectionRegistryException`)
+| `error` (executor validates synchronously before submitting to thread pool)
 
 | Invalid SQL / DB-level failure
 | `running` then `done` with `result.success: false`
+
+| WebSocket transport error
+| `onError` handler sends an `error` message if the session is still open
 |===
 
 == Parallel Cell Execution
 
-Multiple cells can be submitted on the same WebSocket connection simultaneously. Each message is processed independently on a virtual thread, so cell responses may arrive out of order. The `cellId` field is used by the frontend to route each response to the correct cell.
+Multiple cells can be submitted on the same WebSocket connection simultaneously. Each message spawns an independent virtual thread, so responses may arrive out of order. The `cellId` field is used by the frontend to route each response to the correct cell.
 
 [source,json]
 ----
-// Browser sends two queries back-to-back
-{ "cellId": "cell-A", "namespace": "local", "sql": "SELECT 1" }
-{ "cellId": "cell-B", "namespace": "local", "sql": "SELECT 2" }
+// Browser sends two queries back-to-back on the same connection
+{ "cellId": "cell-A", "namespace": "prod_pg", "sql": "SELECT 1" }
+{ "cellId": "cell-B", "namespace": "prod_pg", "sql": "SELECT sleep(2)" }
 
-// Server may respond in any order — cellId identifies which is which
+// Server responds in any order
 { "cellId": "cell-A", "status": "running", ... }
 { "cellId": "cell-B", "status": "running", ... }
+{ "cellId": "cell-A", "status": "done",    ... }  // cell-A finishes first
 { "cellId": "cell-B", "status": "done",    ... }
-{ "cellId": "cell-A", "status": "done",    ... }
 ----
 
-== Example (JavaScript Client)
+== JavaScript Client Example
 
 [source,javascript]
 ----
@@ -171,7 +172,7 @@ const ws = new WebSocket("ws://localhost:8080/ws/query");
 ws.onopen = () => {
   ws.send(JSON.stringify({
     cellId:    "cell-1",
-    namespace: "local",
+    namespace: "prod_pg",
     sql:       "SELECT id, name FROM users LIMIT 10"
   }));
 };
@@ -197,29 +198,18 @@ ws.onmessage = (event) => {
 
 == Implementation Notes
 
-=== Jakarta WebSocket + Jetty 12
-
-Jetty 12 uses the Jakarta WebSocket API (`jakarta.websocket`). The endpoint is annotated with `@ServerEndpoint` and registered programmatically via `JakartaWebSocketServletContainerInitializer`:
-
-[source,java]
-----
-JakartaWebSocketServletContainerInitializer.configure(context, (ctx, wsContainer) -> {
-    wsContainer.addEndpoint(QueryWebSocket.class);
-});
-----
-
 === Per-Connection Instance + Static Executor
 
-Jakarta WebSocket creates a new `QueryWebSocket` instance for each browser connection. Shared dependencies (like `QueryExecutor`) are injected via a static reference set during server startup:
+Jakarta WebSocket creates a new `QueryWebsocket` instance for each browser connection. Shared dependencies (`QueryExecutor`) are injected once at startup via a static reference:
 
 [source,java]
 ----
-QueryWebSocket.setExecutor(executor);  // called once in HttpServer constructor
+QueryWebsocket.setExecutor(executor); // called once in HttpServer constructor
 ----
 
 === Virtual Threads for Non-Blocking Waits
 
-After submitting a query to the `QueryExecutor` thread pool, the WebSocket message thread must not block while waiting for the `Future` result — doing so would prevent other messages from being processed on the same connection. A virtual thread is used to wait and push the response:
+The WebSocket `@OnMessage` handler runs on a Jetty-managed thread. Blocking that thread on `future.get()` would prevent other messages from being processed on the same connection. A virtual thread is created per in-flight query to wait on the `Future` without consuming a platform thread:
 
 [source,java]
 ----
@@ -229,21 +219,13 @@ Thread.ofVirtual().start(() -> {
 });
 ----
 
-== Dependencies Added
+=== Jakarta WebSocket + Jetty 12
 
-[cols="1,1,2"]
-|===
-| Dependency | Version | Purpose
+The endpoint uses the `jakarta.websocket` API and is registered programmatically via `JakartaWebSocketServletContainerInitializer` in `HttpServer`:
 
-| `org.eclipse.jetty.ee10.websocket:jetty-ee10-websocket-jakarta-server`
-| `12.0.15`
-| Jakarta WebSocket server runtime for Jetty 12
-
-| `jakarta.websocket:jakarta.websocket-api`
-| `2.1.1`
-| Jakarta WebSocket API (`@ServerEndpoint`, `@OnMessage`, etc.)
-
-| `org.eclipse.jetty.ee10.websocket:jetty-ee10-websocket-jakarta-client`
-| `12.0.15`
-| Jakarta WebSocket client used in integration tests only (`testImplementation`)
-|===
+[source,java]
+----
+JakartaWebSocketServletContainerInitializer.configure(context, (ctx, wsContainer) -> {
+    wsContainer.addEndpoint(QueryWebsocket.class);
+});
+----

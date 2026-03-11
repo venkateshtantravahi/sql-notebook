@@ -1,106 +1,156 @@
 = Query Executor
 :toc: left
 :toclevels: 3
-:source-highlighter: highlight.js
+:sectnums:
+:source-highlighter: rouge
 
 == Overview
 
-The Query Executor is the core execution engine of `sql-notebook`. It takes a namespace and SQL string, fetches a connection from the `ConnectionRegistry`, runs the query on a thread pool, and returns a structured `QueryResult`.
+The Query Executor is the JDBC execution engine. It accepts a namespace and SQL string, fetches a connection from `ConnectionRegistry`, runs the query on a fixed thread pool, and returns a `Future<QueryResult>`.
+
+The executor is shared across all HTTP and WebSocket handlers. It is created once at startup and shut down cleanly on application exit.
 
 == Classes
 
 === `QueryResult`
 
-A Java record holding the outcome of a single query execution.
+Immutable Java record representing the outcome of a single query. Returned both as `Future<QueryResult>` from the executor and directly serialised to JSON in HTTP and WebSocket responses.
 
-[cols="1,1,2"]
+[cols="1,1,3"]
 |===
-|Field |Type |Description
+| Field | Type | Description
 
-|`namespace` |`String` |Namespace the query ran against
-|`sql` |`String` |The SQL that was executed
-|`columns` |`List<String>` |Column names from the result set
-|`rows` |`List<List<Object>>` |Result rows
-|`executionTimeMs` |`long` |How long the query took in milliseconds
-|`success` |`boolean` |Whether the query succeeded
-|`errorMessage` |`String` |Error detail if success is false, otherwise null
+| `namespace`
+| `String`
+| Namespace the query ran against.
+
+| `sql`
+| `String`
+| The SQL that was executed.
+
+| `columns`
+| `List<String>`
+| Column names from the result set. Empty if the query produced no columns or failed.
+
+| `rows`
+| `List<List<Object>>`
+| Result rows. Each row is a list of column values in column order. Empty on failure or empty result.
+
+| `executionTimeMs`
+| `long`
+| Wall-clock time from connection acquisition to result extraction, in milliseconds.
+
+| `success`
+| `boolean`
+| `true` for a successful query, `false` for a DB-level error or SQL failure.
+
+| `errorMessage`
+| `String`
+| Error detail when `success` is `false`. `null` on success.
 |===
 
 ==== Factory Methods
 
 [source,java]
 ----
-// successful result
+// Successful result
 QueryResult.success(namespace, sql, columns, rows, executionTimeMs);
 
-// failed result
+// Failed result (SQL error, connection error, etc.)
 QueryResult.failure(namespace, sql, executionTimeMs, errorMessage);
 ----
 
 === `QueryExecutor`
 
-Submits queries to a fixed thread pool and returns a `Future<QueryResult>`.
+Wraps a `ExecutorService` and submits each query as an independent task.
 
 [source,java]
 ----
-QueryExecutor executor = new QueryExecutor(registry, 4);
-Future<QueryResult> future = executor.execute("prod_mysql", "SELECT * FROM users");
-QueryResult result = future.get();
+QueryExecutor executor = new QueryExecutor(registry);
+Future<QueryResult> future = executor.execute("prod_pg", "SELECT * FROM users LIMIT 10");
+QueryResult result = future.get(); // blocks until complete
 ----
+
+==== Constructor
+
+The thread pool size is calculated automatically from the number of registered namespaces at construction time:
+
+[source]
+----
+poolSize = max(4, namespaceCount × 3)
+----
+
+This gives at least 4 threads with headroom for 3 concurrent queries per namespace. The pool size is fixed after construction — namespaces added at runtime do not resize it. For notebooks with many dynamically added file sources, the initial minimum of 4 is usually sufficient.
 
 ==== Methods
 
-[cols="2,2"]
+[cols="2,3"]
 |===
-|Method |Description
+| Method | Description
 
-|`execute(namespace, sql)` |Submits query to thread pool, returns `Future<QueryResult>`
-|`shutdown()` |Shuts down the thread pool cleanly
+| `execute(namespace, sql)`
+| Validates the namespace exists, then submits the query to the thread pool. Returns `Future<QueryResult>`. Throws `ConnectionRegistryException` synchronously if the namespace is unknown.
+
+| `shutdown()`
+| Initiates an orderly shutdown. In-flight queries complete before the pool terminates.
 |===
 
 === `QueryExecutorException`
 
-Thrown for executor-level failures such as unknown namespace.
+Thrown for executor-level failures that are not SQL errors (e.g. pool submission failures). Not thrown for invalid SQL — those are captured in `QueryResult.failure`.
 
 == Parallel Execution
 
-Each call to `execute()` is submitted as an independent task on the thread pool. Multiple cells can run simultaneously without blocking each other.
+Each `execute()` call is an independent task. Multiple cells can be in-flight simultaneously without blocking each other, even against the same namespace.
 
 [source,java]
 ----
-Future<QueryResult> f1 = executor.execute("prod_mysql", "SELECT * FROM orders");
+Future<QueryResult> f1 = executor.execute("prod_pg", "SELECT * FROM orders");
 Future<QueryResult> f2 = executor.execute("analytics_pg", "SELECT count(*) FROM events");
 
 QueryResult r1 = f1.get();
 QueryResult r2 = f2.get();
 ----
 
-Thread pool size is configured at construction time and should match the namespace pool size.
-
 == Error Handling
 
-Invalid SQL or runtime errors do not throw exceptions — they are captured and returned as a failed `QueryResult`:
-
-[cols="2,2"]
+[cols="2,3"]
 |===
-|Scenario |Behaviour
+| Scenario | Behaviour
 
-|Invalid SQL |`success=false`, `errorMessage` contains DB error
-|Empty result set |`success=true`, `rows` is empty list
-|Unknown namespace |`ConnectionRegistryException` thrown
+| SQL is invalid or fails at DB level
+| `QueryResult.failure` with `errorMessage` from the JDBC exception. `success = false`. No exception thrown from `execute()`.
+
+| Query returns no rows
+| `QueryResult.success` with empty `rows` list. `success = true`.
+
+| Unknown namespace
+| `ConnectionRegistryException` thrown synchronously from `execute()` before any thread pool submission.
+
+| Connection pool exhausted / timeout
+| Captured inside the thread pool task. Returns `QueryResult.failure` with the HikariCP timeout message.
 |===
 
 == Tests
 
 Located at `src/test/java/io/sqlnotebook/executor/QueryExecutorTest.java`
 
-[cols="2,2"]
+[cols="2,3"]
 |===
-|Test |What it validates
+| Test | What it validates
 
-|`shouldReturnColumnsAndRows` |Correct columns and rows returned for valid SELECT
-|`shouldReturnFailureForInvalidSql` |Invalid SQL returns failed QueryResult
-|`shouldReturnEmptyRowsForNoResults` |Empty result set handled correctly
-|`shouldRunTwoQueriesInParallel` |Two parallel queries return independent results
-|`shouldTrackExecutionTime` |Execution time is captured in the result
+| `shouldReturnColumnsAndRows`
+| Valid SELECT returns correct column names and row data
+
+| `shouldReturnFailureForInvalidSql`
+| Invalid SQL produces `success=false` QueryResult, no exception thrown
+
+| `shouldReturnEmptyRowsForNoResults`
+| Query with no matching rows returns empty list with `success=true`
+
+| `shouldRunTwoQueriesInParallel`
+| Two futures run concurrently and return independent correct results
+
+| `shouldTrackExecutionTime`
+| `executionTimeMs` is a positive, plausible value
 |===

@@ -60,42 +60,46 @@ public class DraftHandler extends HttpServlet {
         this.mapper = new ObjectMapper();
     }
 
-    // GET /draft
-    // Returns the current draft as JSON, oe 204 No content if none exists yet
-
+    /**
+     * GET /draft — returns the current draft as JSON, or 404 if none exists yet.
+     * If the draft file is corrupt (invalid JSON), falls back to the latest backup.
+     * Returns 204 only when no draft and no backup are available.
+     */
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         if (!Files.exists(draftPath)) {
-            // First launch no draft yet, frontend starts a blank notebook
+            // First launch — no draft yet, frontend starts a blank notebook
             resp.setStatus(HttpServletResponse.SC_NOT_FOUND);
             return;
         }
 
+        byte[] raw;
         try {
-            byte[] raw = Files.readAllBytes(draftPath);
-            mapper.readTree(raw);
-
-            resp.setStatus(HttpServletResponse.SC_OK);
-            resp.setContentType("application/json");
-            resp.setCharacterEncoding("UTF-8");
-            resp.getOutputStream().write(raw);
-        } catch (Exception e) {
-            // Draft file is corrupt try the latest backup
-            Path fallback = latestBackup();
-            if (fallback != null) {
-                byte[] raw = Files.readAllBytes(fallback);
-                resp.setStatus(HttpServletResponse.SC_OK);
-                resp.setContentType("application/json");
-                resp.setCharacterEncoding("UTF-8");
-                resp.getOutputStream().write(raw);
-            } else {
-                resp.setStatus(HttpServletResponse.SC_NO_CONTENT);
-            }
+            raw = Files.readAllBytes(draftPath);
+        } catch (IOException e) {
+            // I/O failure reading draft — try backup before giving up
+            serveFallback(resp);
+            return;
         }
+
+        try {
+            mapper.readTree(raw); // validate JSON integrity
+        } catch (Exception e) {
+            // Draft JSON is corrupt — serve most recent backup instead
+            serveFallback(resp);
+            return;
+        }
+
+        resp.setStatus(HttpServletResponse.SC_OK);
+        resp.setContentType("application/json");
+        resp.setCharacterEncoding("UTF-8");
+        resp.getOutputStream().write(raw);
     }
 
-    // POST /draft
-    // Recieves the full notebook JSON, writes atomically, rotates backup
+    /**
+     * POST /draft — receives the full notebook JSON, writes it atomically, and rotates the backup ring.
+     * Requires a {@code version} field in the payload for future format migration.
+     */
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         String body = req.getReader().lines().collect(Collectors.joining());
@@ -111,13 +115,13 @@ public class DraftHandler extends HttpServlet {
 
         // Require at minimum a version field so we can detect format changes later
         if (!node.has("version")) {
-            sendError(resp, 400, "Missing required filed: version");
+            sendError(resp, 400, "Missing required field: version");
             return;
         }
 
         try {
             ensureDirectories();
-            rotateBefore(); // backup current draft before overwritting
+            rotateBefore(); // backup current draft before overwriting
             atomicWrite(body); // write new draft atomically
             pruneBackups(); // keep only the last MAX_BACKUPS
 
@@ -134,7 +138,22 @@ public class DraftHandler extends HttpServlet {
         }
     }
 
-    // private helpers
+    /**
+     * Serves the latest backup file when the primary draft is unavailable or corrupt.
+     * Returns 204 No Content if no backups exist.
+     */
+    private void serveFallback(HttpServletResponse resp) throws IOException {
+        Path fallback = latestBackup();
+        if (fallback != null) {
+            byte[] raw = Files.readAllBytes(fallback);
+            resp.setStatus(HttpServletResponse.SC_OK);
+            resp.setContentType("application/json");
+            resp.setCharacterEncoding("UTF-8");
+            resp.getOutputStream().write(raw);
+        } else {
+            resp.setStatus(HttpServletResponse.SC_NO_CONTENT);
+        }
+    }
 
     /**
      * Ensures ~/.sqlnotebook/drafts/ and ~/.sqlnotebook/backups/ both exist.

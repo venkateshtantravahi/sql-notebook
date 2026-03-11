@@ -15,7 +15,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 /**
- * Servlet handling synchronous HTTP POST requests for SQL execution.
+ * Handles synchronous HTTP POST requests for SQL execution.
+ * Mounted at /query in HttpServer. Intended for one-off programmatic access;
+ * the primary interactive path uses {@link QueryWebsocket} for real-time feedback.
+ *
+ * <p>Request body: {@code { "namespace": "...", "sql": "..." }}
+ * <p>Response: a {@link io.sqlnotebook.executor.QueryResult} JSON object on success,
+ * or {@code { "error": "..." }} on failure.
  */
 public class QueryHandler extends HttpServlet {
 
@@ -26,6 +32,10 @@ public class QueryHandler extends HttpServlet {
         this.executor = executor;
     }
 
+    /**
+     * Executes a SQL query synchronously and writes the result as JSON.
+     * Returns 400 for malformed input, 404 for unknown namespace, 500 for execution errors.
+     */
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         resp.setContentType("application/json");

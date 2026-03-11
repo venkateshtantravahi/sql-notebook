@@ -5,6 +5,8 @@ import io.sqlnotebook.connection.ConnectionRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.sqlnotebook.util.FileUtils;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -80,7 +82,6 @@ public class DuckDbRegistrar {
         ensureDirectories();
     }
 
-    // Public API
     /**
      * Register a local uploaded file as a DuckDB namespace.
      *
@@ -89,7 +90,7 @@ public class DuckDbRegistrar {
      * @throws DuckDbRegistrarException if the file type is unsupported or registration fails
      */
     public String registerFile(String fileName) {
-        String ext = extension(fileName).toLowerCase(Locale.ROOT);
+        String ext = FileUtils.extension(fileName);
         String namespace = uniqueNamespace(sanitise(fileName));
 
         validateExtension(ext);
@@ -182,7 +183,7 @@ public class DuckDbRegistrar {
                 // only re-register if the DuckDB file already exists
                 if (Files.exists(dbFile) && !registry.hasNamespace(namespace)) {
                     try {
-                        String ext = extension(filename).toLowerCase(Locale.ROOT);
+                        String ext = FileUtils.extension(filename);
                         String jdbcUrl = "jdbc:duckdb:" + dbFile;
 
                         // For sqlite files use their own JDBC driver
@@ -251,8 +252,6 @@ public class DuckDbRegistrar {
         while (registry.hasNamespace(base + "_" + i)) i++;
         return base + "_" + i;
     }
-
-    // Private helpers
 
     /**
      * Initialise a DuckDB database for a local file source.
@@ -367,14 +366,6 @@ public class DuckDbRegistrar {
     }
 
     /**
-     * Extract file extension from a filename.
-     */
-    private String extension(String filename) {
-        int dot = filename.lastIndexOf('.');
-        return dot < 0 ? "" : filename.substring(dot + 1);
-    }
-
-    /**
      * Validate that the uploaded file extension is supported.
      */
     private void validateExtension(String ext) {
@@ -400,7 +391,6 @@ public class DuckDbRegistrar {
         }
     }
 
-    // s3 config record
     /**
      * S3 credentials and endpoint configuration.
      * All fields are optional — null means use DuckDB/AWS defaults.
@@ -420,17 +410,21 @@ public class DuckDbRegistrar {
     ) {}
 
     /**
-     * Validate that a resolved path stays within the expected base directory.
-     * Prevents path traversal attacks via filenames like "../../etc/passwd".
+     * Resolves {@code untrusted + suffix} within {@code baseDir}, verifying the result
+     * stays inside the base directory to prevent path traversal attacks.
+     *
+     * @param baseDir   trusted base directory string
+     * @param untrusted user-supplied name (e.g. namespace or filename)
+     * @param suffix    constant suffix appended before resolution (e.g. ".db")
+     * @return the validated, normalised absolute path
+     * @throws DuckDbRegistrarException if the path escapes the base directory
      */
     private Path safePath(String baseDir, String untrusted, String suffix) {
-        Path base     = Path.of(baseDir).normalize().toAbsolutePath();
-        Path resolved = base.resolve(untrusted + suffix).normalize().toAbsolutePath();
-        if (!resolved.startsWith(base)) {
-            throw new DuckDbRegistrarException(
-                    "Path traversal denied: resolved path escapes base directory");
+        try {
+            return FileUtils.resolveInBaseDir(Path.of(baseDir), untrusted + suffix);
+        } catch (SecurityException e) {
+            throw new DuckDbRegistrarException(e.getMessage());
         }
-        return resolved;
     }
 
     public static class DuckDbRegistrarException extends RuntimeException {

@@ -1,125 +1,239 @@
 = Config Parser
 :toc: left
 :toclevels: 3
-:source-highlighter: highlight.js
+:sectnums:
+:source-highlighter: rouge
 
 == Overview
 
-The Config Parser is the entry point of `sql-notebook`. It reads a `sql.properties` file, validates each database connection definition, and returns a structured map of named connections (namespaces) the rest of the application uses.
+The Config Parser reads `sql.properties` at startup, validates each connection block, and returns a `Map<String, ConnectionConfig>` that the rest of the application uses to initialise connection pools.
+
+It is the only module that touches the filesystem for connection configuration. Everything above it (ConnectionRegistry, QueryExecutor, handlers) works purely with the in-memory map it produces.
 
 == Classes
 
 === `ConnectionConfig`
 
-A Java record holding connection details for a single database.
+Immutable Java record holding connection details for a single database namespace.
 
 [cols="1,1,2"]
 |===
-|Field |Type |Description
+| Field | Type | Description
 
-|`namespace` |`String` |Unique name identifying this connection
-|`type` |`String` |Database type (see supported types)
-|`host` |`String` |Database host address
-|`port` |`int` |Database port
-|`database` |`String` |Database/schema name
-|`user` |`String` |Username
-|`password` |`String` |Password
-|`poolSize` |`int` |Max connections in pool (default: 5)
+| `namespace`
+| `String`
+| Unique identifier for this connection. Lowercase letters, numbers and underscores only.
+
+| `type`
+| `String`
+| Database type string. See supported types below.
+
+| `host`
+| `String`
+| Database server hostname or IP. Empty string for SQLite and DuckDB (file-based).
+
+| `port`
+| `int`
+| Database server port. `0` for SQLite and DuckDB.
+
+| `database`
+| `String`
+| Database/schema name, or file path for SQLite and DuckDB.
+
+| `username`
+| `String`
+| Login username. Empty string for SQLite and DuckDB.
+
+| `password`
+| `String`
+| Login password. Empty string for SQLite and DuckDB.
+
+| `poolSize`
+| `int`
+| Maximum concurrent connections in the HikariCP pool. Defaults to `5`.
 |===
 
 === `ConfigParser`
 
-Reads and parses `sql.properties` into `Map<String, ConnectionConfig>`.
+Reads, parses, writes, and modifies `sql.properties`.
 
 [source,java]
 ----
 ConfigParser parser = new ConfigParser();
-Map<String, ConnectionConfig> configs = parser.parse("/path/to/sql.properties");
+
+// Read all connections from disk
+Map<String, ConnectionConfig> configs = parser.parse("sql.properties");
+
+// Append a new connection block
+ConfigParser.write("sql.properties", config);
+
+// Remove a connection block by namespace
+parser.remove("sql.properties", "old_namespace");
 ----
 
 === `ConfigException`
 
-Thrown when the config file is missing, malformed, or contains unsupported values.
+Thrown when the file is malformed, a required field is missing, the type is unsupported, or the port value is invalid.
 
 == Configuration Reference
 
 === File Format
 
-Properties follow the pattern: `db.<namespace>.<field>=<value>`
+Each namespace is a flat block of properties with the namespace name as the prefix.
+The separator is a dot — `<namespace>.<field>=<value>`.
 
 [source,properties]
 ----
-db.local_mysql.type=mysql
-db.local_mysql.host=localhost
-db.local_mysql.port=3306
-db.local_mysql.database=myapp
-db.local_mysql.user=root
-db.local_mysql.password=secret
-db.local_mysql.pool.size=5
+# local_pg
+local_pg.type=postgresql
+local_pg.host=localhost
+local_pg.port=5432
+local_pg.database=myapp
+local_pg.username=admin
+local_pg.password=secret
+----
+
+SQLite only requires `type` and `database` (a file path). All other fields are ignored.
+
+[source,properties]
+----
+# my_sqlite
+my_sqlite.type=sqlite
+my_sqlite.database=/Users/me/data/local.db
 ----
 
 === Supported Database Types
 
-[cols="1,1"]
+[cols="1,2,1"]
 |===
-|Type |Value in properties file
+| Type string | Database | Requires host/port/user?
 
-|MySQL |`mysql`
-|PostgreSQL |`postgres`
-|Oracle |`oracle`
-|SQLite |`sqlite`
-|Microsoft SQL Server |`microsoft-sql-server`
+| `mysql`
+| MySQL 8+
+| Yes
+
+| `postgresql`
+| PostgreSQL 13+
+| Yes
+
+| `oracle`
+| Oracle 19c+
+| Yes
+
+| `microsoft-sql-server`
+| SQL Server 2019+
+| Yes
+
+| `sqlite`
+| SQLite 3
+| No — file path in `database` field only
+
+| `duckdb`
+| DuckDB 1.x
+| No — file path in `database` field. Registered automatically by DuckDbRegistrar for file/remote sources; rarely set manually.
 |===
 
 === Multiple Connections
 
-Multiple namespaces can be defined in the same file:
+Multiple namespaces can coexist in the same file. The parser groups them by prefix and processes each independently.
 
 [source,properties]
 ----
-db.prod_mysql.type=mysql
-db.prod_mysql.host=prod-host
-db.prod_mysql.port=3306
-db.prod_mysql.database=production
-db.prod_mysql.user=admin
-db.prod_mysql.password=secret
+# prod_mysql
+prod_mysql.type=mysql
+prod_mysql.host=prod-db.internal
+prod_mysql.port=3306
+prod_mysql.database=production
+prod_mysql.username=app_user
+prod_mysql.password=secret
 
-db.analytics_pg.type=postgres
-db.analytics_pg.host=analytics-host
-db.analytics_pg.port=5432
-db.analytics_pg.database=analytics
-db.analytics_pg.user=analyst
-db.analytics_pg.password=secret
-db.analytics_pg.pool.size=10
+# analytics_pg
+analytics_pg.type=postgresql
+analytics_pg.host=analytics-db.internal
+analytics_pg.port=5432
+analytics_pg.database=analytics
+analytics_pg.username=analyst
+analytics_pg.password=secret
 ----
+
+Pool size is fixed at 5 per namespace. It is not currently configurable via `sql.properties`.
+
+=== Missing File Behaviour
+
+If `sql.properties` does not exist, `parse()` returns an empty map rather than throwing. The application starts normally with no connections — connections can be added at runtime via the `/connections/add` endpoint.
+
+== Internal Behaviour
+
+=== Parsing Pipeline
+
+[source]
+----
+parse(configFile)
+  │
+  ├── Files.exists() check → return empty map if missing
+  ├── Properties.load()    → flat key=value map
+  ├── groupByNamespace()   → Map<String, Map<String, String>>
+  └── buildConfig()        → validate + construct ConnectionConfig per namespace
+----
+
+=== Write and Remove
+
+`write()` appends a new namespace block to the file and checks for duplicates first.
+`remove()` rewrites the file line-by-line, skipping the target namespace's comment header, property lines, and blank separator.
+
+Both operations are performed on the raw text level (not via `Properties`) so comment formatting is preserved.
 
 == Error Handling
 
-[cols="2,2"]
+[cols="2,3"]
 |===
-|Scenario |Exception Message
+| Scenario | Exception message
 
-|File not found |`Config file not found: <path>`
-|Missing required field |`Missing required field '<field>' for namespace: <namespace>`
-|Unsupported DB type |`Unsupported type '<type>' for namespace: <namespace>`
-|Invalid port or pool size |`Invalid port/pool.size for namespace: <namespace>`
+| File exists but cannot be read
+| `Cannot read config file: <path> — <io error>`
+
+| Required field missing
+| `Missing required field '<field>' for namespace: <namespace>`
+
+| Unsupported database type
+| `Unsupported type '<type>' for namespace '<namespace>'. Supported: [...]`
+
+| Invalid port (non-numeric or out of range)
+| `Invalid port '<value>' for namespace: <namespace>`
 |===
 
 == Tests
 
 Located at `src/test/java/io/sqlnotebook/config/ConfigParserTest.java`
 
-[cols="2,2"]
+[cols="2,3"]
 |===
-|Test |What it validates
+| Test | What it validates
 
-|`parseSingleMysqlConnection` |Single MySQL config parses correctly
-|`parseTwoConnections` |Two namespaces both parse independently
-|`parseSingleOracleConnection` |Oracle type is supported
-|`parseSingleSqliteConnection` |SQLite type is supported
-|`parseSingleMssqlConnection` |Microsoft SQL Server type is supported
-|`throwsOnMissingRequiredField` |Missing field gives meaningful error
-|`throwsOnUnsupportedType` |Unknown DB type throws exception
-|`throwsWhenFileNotFound` |Missing file throws exception
-|`defaultPoolSizeAppliedWhenMissing` |Pool size defaults to 5
+| `parseSingleMysqlConnection`
+| Single MySQL block parses to correct ConnectionConfig
+
+| `parseTwoConnections`
+| Two namespace blocks produce independent configs
+
+| `parseSingleOracleConnection`
+| Oracle type accepted
+
+| `parseSingleSqliteConnection`
+| SQLite type accepted; host/port/username default to empty
+
+| `parseSingleMssqlConnection`
+| `microsoft-sql-server` type accepted
+
+| `throwsOnMissingRequiredField`
+| Missing host/port/username throws ConfigException with field name
+
+| `throwsOnUnsupportedType`
+| Unknown type string throws ConfigException
+
+| `returnsEmptyMapWhenFileNotFound`
+| Missing file returns empty map (no exception)
+
+| `defaultPoolSizeAppliedWhenMissing`
+| Pool size defaults to 5
 |===
