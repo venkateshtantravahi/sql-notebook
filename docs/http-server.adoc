@@ -6,215 +6,306 @@
 
 == Overview
 
-The HTTP Server module exposes the SQL Notebook backend over a simple REST API using an embedded Jetty 12 server.
-It bridges the frontend notebook UI with the `ConnectionRegistry` and `QueryExecutor` modules, allowing browsers to list configured namespaces and submit SQL queries.
+The HTTP Server module embeds a Jetty 12 server and mounts all REST handlers. It is the integration point between every backend module and the browser frontend.
 
-No external server installation is required — the server starts automatically when the application launches.
+The server also serves the compiled React frontend from the `static/` resource directory, so no separate web server is needed.
 
 == Starting the Server
 
-The server is started programmatically via `HttpServer`:
-
 [source,java]
 ----
-HttpServer server = new HttpServer(registry, executor, 8080);
+HttpServer server = new HttpServer(registry, sourceRegistry, registrar, executor, 8080);
 server.start();
 ----
 
-By default the server listens on port `8080`. The port is configurable via the constructor.
+Default port is `8080`. On successful startup the application opens the browser automatically at `http://localhost:8080`.
+
+== Handler Map
+
+[cols="1,1,2"]
+|===
+| Path | Handler | Description
+
+| `/namespaces`
+| `NamespaceHandler`
+| Ping all namespaces and return health status
+
+| `/connections/*`
+| `ConnectionHandler`
+| CRUD for persistent database connections
+
+| `/query`
+| `QueryHandler`
+| Synchronous SQL execution over HTTP
+
+| `/ws/query`
+| `QueryWebsocket`
+| Asynchronous SQL execution over WebSocket
+
+| `/schema/*`
+| `SchemaHandler`
+| Table and column introspection per namespace
+
+| `/sources/*`
+| `FileSourceHandler`
+| Upload files, register remote URLs, list and delete sources
+
+| `/draft`
+| `DraftHandler`
+| Notebook draft persistence (save/load)
+
+| `/browse`
+| `FileBrowserHandler`
+| Local filesystem browser for SQLite/DuckDB file selection
+|===
 
 == Endpoints
 
 === GET /namespaces
 
-Returns the set of all configured namespace names loaded from `sql.properties`.
+Returns health status for all registered namespaces. Each namespace is pinged with `SELECT 1` in parallel with a 3-second timeout.
 
-==== Request
-
-[source]
-----
-GET /namespaces
-----
-
-No request body or parameters required.
+Query parameter `all=true` includes ephemeral namespaces (uploaded files, remote URLs).
+Without it, only persistent connections from `sql.properties` are returned.
 
 ==== Response
 
 [source,json]
 ----
-["prod", "staging", "local"]
+[
+  { "name": "prod_pg",     "healthy": true,  "latencyMs": 4   },
+  { "name": "analytics",   "healthy": false, "latencyMs": 3012, "error": "Connection refused" }
+]
 ----
 
-[cols="1,3"]
-|===
-| Status Code | Meaning
+Results are sorted alphabetically by name for stable UI ordering.
 
-| `200 OK`
-| Returns a JSON array of namespace name strings.
-|===
+'''
 
-==== Example (curl)
+=== GET /connections/:namespace
 
-[source,bash]
+Returns the config for a single namespace (password intentionally excluded).
+
+[source,json]
 ----
-curl http://localhost:8080/namespaces
+{
+  "namespace": "prod_pg",
+  "type":      "postgresql",
+  "host":      "db.internal",
+  "port":      5432,
+  "database":  "myapp",
+  "username":  "app_user"
+}
 ----
+
+Returns `404` if the namespace is unknown or is an ephemeral source (file/remote).
+
+'''
+
+=== POST /connections/add
+
+Register a new persistent database connection. Writes to `sql.properties` and hot-loads into the registry.
+
+==== Request
+
+[source,json]
+----
+{
+  "namespace": "prod_pg",
+  "type":      "postgresql",
+  "host":      "db.internal",
+  "port":      5432,
+  "database":  "myapp",
+  "username":  "app_user",
+  "password":  "secret"
+}
+----
+
+==== Response
+
+[source,json]
+----
+{ "namespace": "prod_pg", "message": "Connection added" }
+----
+
+Returns `409` if the namespace already exists. Returns `400` for validation failures (see validation rules in `ConnectionHandler`).
+
+'''
+
+=== POST /connections/test
+
+Test a connection without saving it. Uses `DriverManager` directly (not HikariCP) so no pool is created.
+
+Request body is the same shape as `/connections/add`.
+
+[source,json]
+----
+{ "success": true, "message": "Connection successful" }
+----
+
+On failure, returns a human-readable error (not the raw JDBC message):
+
+[source,json]
+----
+{ "success": false, "message": "Connection refused — check host and port" }
+----
+
+'''
+
+=== PUT /connections/:namespace
+
+Update an existing connection. Supports renaming — the URL path is the old namespace name, the request body contains the new config including the new namespace name.
+
+Internally: removes old entry from `sql.properties` + registry, writes and registers the new config.
+
+Returns `404` if old namespace unknown. Returns `409` if new namespace name already exists.
+
+'''
+
+=== DELETE /connections/:namespace
+
+Remove a persistent connection. Removes from `sql.properties` and closes the HikariCP pool.
+
+[source,json]
+----
+{ "namespace": "prod_pg", "message": "Connection removed" }
+----
+
+Does not affect ephemeral namespaces — use `DELETE /sources/:namespace` for those.
 
 '''
 
 === POST /query
 
-Executes a SQL statement against a named namespace and returns the full result set.
+Synchronous SQL execution. Blocks until the query finishes. Intended for scripting and testing; the frontend uses WebSocket for interactive queries.
 
 ==== Request
 
-Content-Type: `application/json`
+[source,json]
+----
+{ "namespace": "prod_pg", "sql": "SELECT id, name FROM users LIMIT 10" }
+----
+
+==== Response (success)
 
 [source,json]
 ----
 {
-  "namespace": "local",
-  "sql": "SELECT id, name FROM users LIMIT 10"
+  "namespace":      "prod_pg",
+  "sql":            "SELECT id, name FROM users LIMIT 10",
+  "columns":        ["id", "name"],
+  "rows":           [["1", "Alice"], ["2", "Bob"]],
+  "executionTimeMs": 38,
+  "success":        true,
+  "errorMessage":   null
 }
 ----
 
-[cols="1,1,3"]
-|===
-| Field | Type | Description
-
-| `namespace`
-| String (required)
-| The namespace name as defined in `sql.properties`.
-
-| `sql`
-| String (required)
-| The SQL statement to execute.
-|===
-
-==== Response (Success)
-
-[source,json]
-----
-{
-  "namespace": "local",
-  "sql": "SELECT id, name FROM users LIMIT 10",
-  "columns": ["id", "name"],
-  "rows": [
-    ["1", "Alice"],
-    ["2", "Bob"]
-  ],
-  "executionTimeMs": 42,
-  "success": true,
-  "errorMessage": null
-}
-----
-
-==== Response (Query Error)
-
-If the SQL itself is invalid or fails at the database level, the server still returns `200 OK` — the error is surfaced inside the response body. This allows the notebook UI to display the error inline in the cell.
-
-[source,json]
-----
-{
-  "namespace": "local",
-  "sql": "SELECT * FROM nonexistent_table",
-  "columns": [],
-  "rows": [],
-  "executionTimeMs": 5,
-  "success": false,
-  "errorMessage": "Table 'nonexistent_table' doesn't exist"
-}
-----
+SQL-level errors return `200 OK` with `success: false` — the error is in `errorMessage`, not the HTTP status. Only infrastructure failures (unknown namespace, missing fields) produce non-200 status codes.
 
 ==== Error Responses
 
 [cols="1,3"]
 |===
-| Status Code | Meaning
+| Status | Cause
 
-| `400 Bad Request`
-| Request body is missing, not valid JSON, or `namespace`/`sql` fields are absent or blank.
+| `400`
+| Empty body, invalid JSON, or missing `namespace`/`sql` fields
 
-| `404 Not Found`
-| The specified `namespace` does not exist in the registry.
+| `404`
+| Namespace not registered
 
-| `500 Internal Server Error`
-| An unexpected server-side error occurred during execution.
+| `500`
+| Unexpected server error
 |===
 
-==== Example (curl)
+'''
 
-[source,bash]
-----
-curl -X POST http://localhost:8080/query \
-  -H "Content-Type: application/json" \
-  -d '{"namespace": "local", "sql": "SELECT 1"}'
-----
+=== GET /schema/:namespace
 
-== Error Response Format
+Returns all tables and columns for a namespace, including primary key and foreign key metadata. See `schema.adoc` for the full response shape and per-database behaviour.
 
-All error responses share a consistent JSON structure:
+Returns `404` for unknown namespaces and for ephemeral namespaces (file/remote sources — use `SELECT * FROM <view>` to explore their schema directly).
+
+'''
+
+=== POST /sources/upload
+
+Upload a local file and register it as a DuckDB namespace. See `file-sources.adoc` for supported formats, size limits, and the full request/response shape.
+
+'''
+
+=== POST /sources/remote
+
+Register a remote HTTP/HTTPS or S3 URL as a DuckDB namespace. See `file-sources.adoc`.
+
+'''
+
+=== GET /sources
+
+List all registered file and remote data sources.
 
 [source,json]
 ----
 {
-  "error": "Human-readable error message"
+  "sources": [
+    { "kind": "file",   "namespace": "sales_csv",    "filename": "sales data.csv", "addedAt": "2026-03-01T10:00:00Z" },
+    { "kind": "remote", "namespace": "events_parquet", "url": "s3://bucket/events.parquet", "addedAt": "2026-03-02T09:00:00Z" }
+  ]
 }
 ----
 
-== Dependencies Added
+S3 secret keys are always omitted from this response.
 
-[cols="1,1,2"]
-|===
-| Dependency | Version | Purpose
+'''
 
-| `org.eclipse.jetty:jetty-server`
-| `12.0.15`
-| Embedded HTTP server core
+=== DELETE /sources/:namespace
 
-| `org.eclipse.jetty.ee10:jetty-ee10-servlet`
-| `12.0.15`
-| Servlet container support for Jetty 12 (EE10/Jakarta namespace)
+Remove a source. For file sources, deletes the uploaded file from disk. Deregisters the DuckDB namespace from the registry.
 
-| `jakarta.servlet:jakarta.servlet-api`
-| `6.0.0`
-| Jakarta Servlet API (replaces javax.servlet in Jetty 12)
+'''
 
-| `com.fasterxml.jackson.core:jackson-databind`
-| `2.17.0`
-| JSON serialization and deserialization
-|===
+=== GET /draft
+
+Returns the current notebook draft. Returns `404` on first launch (no draft yet). If the draft file is corrupt, falls back to the latest backup automatically.
+
+See `draft.adoc` for the full protocol and storage layout.
+
+'''
+
+=== POST /draft
+
+Saves the full notebook state. Atomically writes the draft file and rotates the backup ring.
+
+Requires a `version` field in the JSON body. Returns `{ "saved": true, "savedAt": "<ISO timestamp>" }` on success.
+
+'''
+
+=== GET /browse
+
+Returns directory listings for local filesystem navigation. Used by the frontend file picker when adding a local SQLite or DuckDB file.
+
+Restricted to safe roots (home directory, `/tmp`, common data directories). Path traversal is blocked — requests for paths outside the allowed roots return `403`.
+
+== Error Response Format
+
+All handlers use a consistent error shape:
+
+[source,json]
+----
+{ "error": "Human-readable error message" }
+----
 
 == Implementation Notes
 
-=== Jetty 12 + EE10
+=== Jetty 12 + Jakarta EE10
 
-Jetty 12 restructured its servlet support. The servlet context handler now lives under the `ee10` artifact:
-
-[source,kotlin]
-----
-implementation("org.eclipse.jetty.ee10:jetty-ee10-servlet:12.0.15")
-----
-
-And imports use the `jakarta.servlet` namespace (not `javax.servlet`):
-
-[source,java]
-----
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-----
+All servlet imports use the `jakarta.servlet` namespace (not `javax.servlet`). The servlet context handler comes from the `jetty-ee10-servlet` artifact.
 
 === Request Body Reading
 
-Jetty 12 does not reliably support `req.getReader()` in all configurations. Request bodies are read via `InputStream` instead:
+`req.getInputStream().readAllBytes()` is used instead of `req.getReader()` in `QueryHandler` because Jetty 12 does not reliably expose a buffered reader in all configurations. Other handlers use `req.getReader()` where the content is always text.
 
-[source,java]
-----
-String rawBody = new String(req.getInputStream().readAllBytes());
-body = mapper.readTree(rawBody);
-----
+=== SQL Error vs HTTP Error
 
-=== Query Errors vs HTTP Errors
-
-SQL execution errors (bad SQL, missing table, type mismatch) are returned as `200 OK` with `success: false` in the payload. Only infrastructure-level problems (unknown namespace, missing fields) produce non-200 HTTP status codes. This distinction keeps the notebook UI simple — every cell response has the same shape.
+SQL execution errors (`success: false`) always return HTTP `200`. Only infrastructure failures produce non-200 status codes. This keeps the frontend logic uniform — every cell response has the same `QueryResult` shape regardless of outcome.

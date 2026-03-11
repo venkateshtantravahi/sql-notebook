@@ -1,0 +1,255 @@
+= File and Remote Data Sources
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: rouge
+
+== Overview
+
+The file sources feature lets users query local uploaded files and remote HTTP/S3 URLs as if they were regular database namespaces — no connection config, no schema setup.
+Each source becomes a queryable namespace backed by a per-file DuckDB database.
+
+Three classes form this feature:
+
+* **`DuckDbRegistrar`** — creates DuckDB JDBC connections and view definitions for each source
+* **`FileSourceRegistry`** — persists the source list to `sources.json` and rehydrates on restart
+* **`FileSourceHandler`** — the HTTP handler at `/sources/*`
+
+== Supported File Formats
+
+[cols="1,1,2"]
+|===
+| Extension | Format | Size Limit
+
+| `.csv`, `.tsv`
+| Delimited text (auto-detected)
+| 1 GB
+
+| `.json`, `.ndjson`
+| JSON / newline-delimited JSON
+| 1 GB
+
+| `.parquet`
+| Apache Parquet (columnar)
+| 2 GB
+
+| `.arrow`
+| Apache Arrow IPC
+| 2 GB
+
+| `.xlsx`, `.xls`
+| Excel workbook (requires `excel` extension)
+| 500 MB
+
+| `.db`, `.sqlite`
+| SQLite database (uses the SQLite JDBC driver, not DuckDB)
+| 2 GB
+|===
+
+== Architecture
+
+=== DuckDB Connection Model
+
+Each registered file or remote source gets its own DuckDB database file at:
+
+[source]
+----
+~/.sqlnotebook/duckdb/<namespace>.db
+----
+
+The database file persists across restarts so DuckDB does not need to re-read the source file on every startup. Within each `.db` file, a view named after the namespace is created:
+
+[source,sql]
+----
+CREATE OR REPLACE VIEW "sales_csv" AS SELECT * FROM read_csv_auto('/path/to/sales data.csv')
+----
+
+Users write `SELECT * FROM sales_csv` to query the file. The view delegates to DuckDB's read functions which handle format detection, schema inference, and pushdown.
+
+SQLite files are an exception — they use the JDBC SQLite driver directly, not DuckDB, so they behave identically to manually configured SQLite connections.
+
+=== Namespace Naming
+
+File and URL names are sanitised into valid namespace identifiers:
+
+[source]
+----
+"sales data.csv"                              → "sales_data_csv"
+"orders (2).parquet"                          → "orders_2_parquet"
+"https://s3.amazonaws.com/bucket/users.json"  → "users_json"
+"s3://my-bucket/folder/events.parquet"        → "events_parquet"
+----
+
+Rules: non-alphanumeric characters become underscores, consecutive underscores are collapsed, leading/trailing underscores are stripped, names starting with a digit are prefixed with `src_`.
+
+If the sanitised name is already taken, a numeric suffix is appended: `sales_csv`, `sales_csv_2`, `sales_csv_3`, etc.
+
+=== Ephemeral Namespaces
+
+File and remote sources are registered in `ConnectionRegistry` as *ephemeral* — a flag that tells `ConnectionHandler` not to write them back to `sql.properties` on removal. Their lifecycle is managed entirely by `FileSourceRegistry` and `sources.json`.
+
+== API Endpoints
+
+=== POST /sources/upload
+
+Upload a local file as multipart/form-data. Field name must be `file`.
+
+[source,bash]
+----
+curl -X POST http://localhost:8080/sources/upload \
+  -F "file=@/path/to/sales data.csv"
+----
+
+==== Response
+
+[source,json]
+----
+{
+  "namespace": "sales_data_csv",
+  "filename":  "sales_data_csv.csv",
+  "kind":      "file",
+  "sizeBytes": 2048576
+}
+----
+
+The file is saved to `~/.sqlnotebook/uploads/` before registration. If DuckDB registration fails, the uploaded file is deleted automatically to avoid orphaned files.
+
+'''
+
+=== POST /sources/remote
+
+Register a remote HTTP/HTTPS or S3 URL.
+
+==== Request
+
+[source,json]
+----
+{
+  "url":               "s3://my-bucket/events.parquet",
+  "label":             "events_2024",
+  "s3Endpoint":        "https://account.r2.cloudflarestorage.com",
+  "s3Region":          "auto",
+  "s3AccessKeyId":     "AKIA...",
+  "s3SecretAccessKey": "secret"
+}
+----
+
+[cols="1,1,3"]
+|===
+| Field | Required | Description
+
+| `url`
+| Yes
+| Must start with `http://`, `https://`, or `s3://`
+
+| `label`
+| No
+| Used as the namespace base name. Defaults to the URL's last path segment.
+
+| `s3Endpoint`
+| No
+| Custom S3-compatible endpoint (Cloudflare R2, MinIO, DigitalOcean Spaces, Backblaze B2)
+
+| `s3Region`
+| No
+| AWS region. Defaults to DuckDB/AWS default.
+
+| `s3AccessKeyId`
+| No
+| Access key for private buckets. Public buckets do not need credentials.
+
+| `s3SecretAccessKey`
+| No
+| Secret key. Required when `s3AccessKeyId` is provided.
+|===
+
+==== Response
+
+[source,json]
+----
+{
+  "namespace": "events_2024",
+  "url":       "s3://my-bucket/events.parquet",
+  "kind":      "remote"
+}
+----
+
+'''
+
+=== GET /sources
+
+List all registered sources. S3 secret keys are always omitted.
+
+[source,json]
+----
+{
+  "sources": [
+    {
+      "kind":      "file",
+      "namespace": "sales_data_csv",
+      "filename":  "sales_data_csv.csv",
+      "addedAt":   "2026-03-01T10:00:00Z"
+    },
+    {
+      "kind":        "remote",
+      "namespace":   "events_2024",
+      "url":         "s3://my-bucket/events.parquet",
+      "s3Endpoint":  "https://account.r2.cloudflarestorage.com",
+      "s3Region":    "auto",
+      "s3AccessKeyId": "AKIA...",
+      "addedAt":     "2026-03-02T09:00:00Z"
+    }
+  ]
+}
+----
+
+'''
+
+=== DELETE /sources/:namespace
+
+Remove a source. For file sources, deletes the uploaded file from disk. The DuckDB `.db` file is also deleted. The namespace is deregistered from `ConnectionRegistry`.
+
+== Persistence — sources.json
+
+`FileSourceRegistry` writes the source list to `~/.sqlnotebook/sources.json` after every add or remove. The write is atomic (tmp file → rename) so a crash never leaves a corrupt file.
+
+On startup, `rehydrate()` is called to re-register every source whose backing data still exists. Sources whose files have been deleted externally are skipped with a warning log.
+
+S3 credentials are stored in `sources.json` in plaintext. This is acceptable for a local desktop tool where the file is accessible only to the current OS user. Encryption at rest is not implemented in v1.
+
+== Extension Loading
+
+DuckDB extensions are loaded once per `.db` file on first connection:
+
+* `httpfs` — required for all sources (enables `read_csv_auto` remote paths and S3 access)
+* `excel` — required for `.xlsx` and `.xls` files
+
+Both are bundled with DuckDB 1.x and do not require a separate download.
+
+== Security
+
+=== Path Traversal Prevention
+
+All filename-to-path resolution goes through `FileUtils.resolveInBaseDir()`, which normalises and validates that the resolved absolute path starts with the expected base directory. Filenames like `../../etc/passwd` are rejected before any filesystem operation.
+
+=== S3 Endpoint Validation
+
+The URL scheme is validated against an allowlist (`http://`, `https://`, `s3://`) in `FileSourceHandler` before the URL is passed to DuckDB. DuckDB itself rejects malformed endpoint values at connection time.
+
+== Tests
+
+Located at `src/test/java/io/sqlnotebook/duckdb/` and `src/test/java/io/sqlnotebook/server/FileSourceHandlerTest.java`
+
+[cols="2,3"]
+|===
+| Test | What it validates
+
+| `FileSourceRegistryTest`
+| Add/remove/list/rehydrate round-trip with a temp sources.json
+
+| `FileSourceHandlerTest`
+| Upload endpoint validates extension, size limit, and saves correctly
+
+| `DuckDbRegistrarTest`
+| Sanitise produces expected namespace names; duplicate names get suffix
+|===

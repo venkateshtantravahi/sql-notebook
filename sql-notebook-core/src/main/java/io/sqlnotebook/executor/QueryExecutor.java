@@ -53,8 +53,6 @@ public class QueryExecutor {
         threadPool.shutdown();
     }
 
-    // ── private helpers ───────────────────────────────────────────────────────
-
     /**
      * Calculates thread pool size from namespace count.
      * min ensures we always have at least 4 threads even with 0 or 1 namespaces.

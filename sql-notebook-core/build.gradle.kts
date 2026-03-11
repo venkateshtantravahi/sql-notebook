@@ -109,6 +109,20 @@ tasks.named<JavaExec>("run") {
     }
 }
 
+// javadoc task — generates API reference into docs/javadoc/
+tasks.named<Javadoc>("javadoc") {
+    description = "Generate Javadoc HTML into docs/javadoc/"
+    group = "documentation"
+    setDestinationDir(file("${rootProject.projectDir}/docs/javadoc"))
+    (options as StandardJavadocDocletOptions).apply {
+        encoding = "UTF-8"
+        charSet = "UTF-8"
+        windowTitle = "sql-notebook API"
+        docTitle = "sql-notebook ${project.version} API"
+        addStringOption("Xdoclint:none", "-quiet") // suppress warnings for undocumented members
+    }
+}
+
 // dev run task — skips frontend build
 tasks.register<JavaExec>("runDev") {
     val appVersion = project.version.toString()

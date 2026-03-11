@@ -1,5 +1,6 @@
 package io.sqlnotebook.duckdb;
 
+import io.sqlnotebook.util.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
@@ -140,11 +141,8 @@ public class FileSourceRegistry {
 
         // Delete uploaded file for file sources
         if ("file".equals(entry.kind()) && entry.filename() != null) {
-            Path baseDir     = Path.of(registrar.UPLOAD_DIR).normalize().toAbsolutePath();
-            Path uploadedFile = baseDir.resolve(entry.filename()).normalize().toAbsolutePath();
-            if (!uploadedFile.startsWith(baseDir)) {
-                log.warn("[sources] path traversal blocked for filename '{}'", entry.filename());
-            } else {
+            Path uploadedFile = resolveUploadPath(entry.filename());
+            if (uploadedFile != null) {
                 try {
                     Files.deleteIfExists(uploadedFile);
                     log.info("[sources] deleted uploaded file '{}'", uploadedFile);
@@ -252,9 +250,8 @@ public class FileSourceRegistry {
         if ("file".equals(kind)) {
             String filename = node.path("filename").asString();
             // Verify the upload file still exists
-            Path baseDir   = Path.of(registrar.UPLOAD_DIR).normalize().toAbsolutePath();
-            Path uploadPath = baseDir.resolve(filename).normalize().toAbsolutePath();
-            if (!uploadPath.startsWith(baseDir)) {
+            Path uploadPath = resolveUploadPath(filename);
+            if (uploadPath == null) {
                 log.warn("[sources] path traversal blocked for filename '{}' — skipping", filename);
                 return;
             }
@@ -286,11 +283,30 @@ public class FileSourceRegistry {
         }
     }
 
+    /**
+     * Ensures the parent directory of {@code SOURCES_FILE} exists.
+     * Called once during construction so sources.json can always be written.
+     */
     private void ensureParentDir() {
         try {
             Files.createDirectories(SOURCES_FILE.getParent());
         } catch (IOException e) {
             log.warn("[sources] could not create parent directory: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Resolves {@code filename} within the uploads directory and validates it does not
+     * escape the base directory (path traversal guard).
+     *
+     * @param filename the raw filename from the registry entry
+     * @return the resolved {@link Path}, or {@code null} if the path is unsafe
+     */
+    private Path resolveUploadPath(String filename) {
+        try {
+            return FileUtils.resolveInBaseDir(Path.of(registrar.UPLOAD_DIR), filename);
+        } catch (SecurityException e) {
+            return null;
         }
     }
 

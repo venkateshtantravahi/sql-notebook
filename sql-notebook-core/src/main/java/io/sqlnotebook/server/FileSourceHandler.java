@@ -2,6 +2,7 @@ package io.sqlnotebook.server;
 
 import io.sqlnotebook.duckdb.DuckDbRegistrar;
 import io.sqlnotebook.duckdb.FileSourceRegistry;
+import io.sqlnotebook.util.FileUtils;
 import jakarta.servlet.MultipartConfigElement;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
@@ -161,7 +162,7 @@ public class FileSourceHandler extends HttpServlet {
         }
 
         // Validate extension
-        String ext = extension(filename);
+        String ext = FileUtils.extension(filename);
         if (!SUPPORTED_EXTENSIONS.contains(ext)) {
             sendError(resp, 400,
                     "Unsupported file type: .%s — supported: %s"
@@ -349,12 +350,6 @@ public class FileSourceHandler extends HttpServlet {
         String name = Path.of(raw).getFileName().toString();
         // Remove characters that could cause issues on any OS
         return name.replaceAll("[^a-zA-Z0-9._\\- ]", "_");
-    }
-
-    /** Extract lowercase file extension from filename. */
-    private String extension(String filename) {
-        int dot = filename.lastIndexOf('.');
-        return dot < 0 ? "" : filename.substring(dot + 1).toLowerCase(Locale.ROOT);
     }
 
     private String nullIfEmpty(String s) {

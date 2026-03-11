@@ -1,18 +1,12 @@
 import { MdCheckCircle, MdClose, MdChevronRight } from 'react-icons/md'
 import { LuArrowUp, LuFolder, LuDatabase } from 'react-icons/lu'
 import { useState, useEffect, useCallback } from 'react'
+import { formatFileSize } from '../../utils/fileUtils.jsx'
 
 // FileBrowserModal
 // Lets the user navigate the server-side filesystem and pick a .db / .sqlite file.
 // Calls onSelect(absolutePath) when a file is chosen.
 // Uses GET /files/browse?path= → { path, parent, entries: [{name, type, size?}] }
-
-function formatSize(bytes) {
-    if (bytes == null) return ''
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
 
 function FileBrowserModal({ isOpen, onSelect, onClose, initialPath }) {
     const [currentPath, setCurrentPath] = useState(initialPath || '')
@@ -84,7 +78,7 @@ function FileBrowserModal({ isOpen, onSelect, onClose, initialPath }) {
         <div className="fixed inset-0 z-60 bg-black/60 flex items-center justify-center p-4">
             <div
                 className="
-                w-full max-w-lg bg-white dark:bg-gray-900
+                w-full max-w-lg bg-white dark:bg-[#161f2e]
                 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700
                 flex flex-col
             "
@@ -211,7 +205,7 @@ function FileBrowserModal({ isOpen, onSelect, onClose, initialPath }) {
                                         </span>
                                         {isFile && entry.size != null && (
                                             <span className="text-gray-300 dark:text-gray-700 shrink-0">
-                                                {formatSize(entry.size)}
+                                                {formatFileSize(entry.size)}
                                             </span>
                                         )}
                                         {isDir && (

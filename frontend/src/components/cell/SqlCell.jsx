@@ -10,9 +10,8 @@ import ResultsTable from './ResultsTable.jsx'
 import useZoomStore from '../../store/useZoomStore.js'
 import { useQuerySocket } from '../../hooks/useQuerySocket.js'
 
-
 const themeCompartment = new Compartment()
-const fontCompartment  = new Compartment()
+const fontCompartment = new Compartment()
 
 function buildThemeExt(isDark) {
     return isDark ? oneDark : []
@@ -20,19 +19,19 @@ function buildThemeExt(isDark) {
 
 function buildFontExt(level) {
     return EditorView.theme({
-        '&':            { fontSize: `${level * 13}px`, minHeight: '80px' },
-        '.cm-editor':   { borderRadius: '0' },
+        '&': { fontSize: `${level * 13}px`, minHeight: '80px' },
+        '.cm-editor': { borderRadius: '0' },
         '.cm-scroller': { fontFamily: 'JetBrains Mono, Fira Code, Menlo, monospace' },
     })
 }
 
 function SqlCell({ cell }) {
-    const { theme }  = useThemeStore()
-    const { level }  = useZoomStore()
+    const { theme } = useThemeStore()
+    const { level } = useZoomStore()
     const { updateQuery, updateNamespace, deleteCell } = useCellStore()
-    const editorRef  = useRef(null)
-    const viewRef    = useRef(null)
-    const runQuery   = useQuerySocket()
+    const editorRef = useRef(null)
+    const viewRef = useRef(null)
+    const runQuery = useQuerySocket()
 
     // Build editor ONCE — theme and font go through Compartments so they
     // can be hot-swapped when the stores change without remounting.
@@ -47,7 +46,7 @@ function SqlCell({ cell }) {
                     sql(),
                     themeCompartment.of(buildThemeExt(theme === 'dark')),
                     fontCompartment.of(buildFontExt(level)),
-                    EditorView.updateListener.of(update => {
+                    EditorView.updateListener.of((update) => {
                         if (update.docChanged) {
                             updateQuery(cell.id, update.state.doc.toString())
                         }
@@ -64,14 +63,14 @@ function SqlCell({ cell }) {
     // Hot-swap theme when store changes — no remount needed
     useEffect(() => {
         viewRef.current?.dispatch({
-            effects: themeCompartment.reconfigure(buildThemeExt(theme === 'dark'))
+            effects: themeCompartment.reconfigure(buildThemeExt(theme === 'dark')),
         })
     }, [theme])
 
     // Hot-swap font size when zoom changes — no remount needed
     useEffect(() => {
         viewRef.current?.dispatch({
-            effects: fontCompartment.reconfigure(buildFontExt(level))
+            effects: fontCompartment.reconfigure(buildFontExt(level)),
         })
     }, [level])
 
@@ -81,16 +80,18 @@ function SqlCell({ cell }) {
     }
 
     return (
-        <div className="
+        <div
+            className="
             rounded-lg border border-gray-200 dark:border-gray-700
-            bg-white dark:bg-gray-900
+            bg-white dark:bg-[#161f2e]
             shadow-sm overflow-hidden
-        ">
+        "
+        >
             <CellToolbar
                 cell={cell}
                 onRun={handleRun}
                 onDelete={() => deleteCell(cell.id)}
-                onNamespaceChange={ns => updateNamespace(cell.id, ns)}
+                onNamespaceChange={(ns) => updateNamespace(cell.id, ns)}
             />
             <div ref={editorRef} className="border-b border-gray-200 dark:border-gray-700" />
             <ResultsTable results={cell.results} error={cell.error} status={cell.status} />

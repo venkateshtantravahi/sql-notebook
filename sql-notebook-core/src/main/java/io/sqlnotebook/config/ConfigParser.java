@@ -30,8 +30,6 @@ public class ConfigParser {
     // Smart pool size — small fixed default, no user input required
     private static final int DEFAULT_POOL_SIZE = 5;
 
-    // ── parse ────────────────────────────────────────────────────────────────
-
     /**
      * Parses sql.properties and returns a map of namespace → ConnectionConfig.
      * Returns an empty map (not an exception) if the file does not exist —
@@ -132,8 +130,6 @@ public class ConfigParser {
                 namespace, type, host, port, database, username, password, DEFAULT_POOL_SIZE
         );
     }
-
-    // ── write ────────────────────────────────────────────────────────────────
 
     /**
      * Appends a new namespace block to sql.properties.

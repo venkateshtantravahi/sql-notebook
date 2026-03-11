@@ -1,66 +1,17 @@
-import { useState, useEffect } from 'react'
 import { MdPlayArrow, MdClose, MdDownload } from 'react-icons/md'
 import { CgSpinner } from 'react-icons/cg'
 import useZoomStore from '../../store/useZoomStore.js'
-
-function exportCSV(results) {
-    if (!results) return
-    const header = results.columns.join(',')
-    const rows = results.rows.map((row) =>
-        results.columns
-            .map((col, colIdx) => {
-                const val = Array.isArray(row) ? row[colIdx] : row[col]
-                if (val === null || val === undefined) return ''
-                const str = String(val)
-                return str.includes(',') || str.includes('"') || str.includes('\n')
-                    ? `"${str.replace(/"/g, '""')}"`
-                    : str
-            })
-            .join(',')
-    )
-    download([header, ...rows].join('\n'), 'results.csv', 'text/csv')
-}
-
-function exportJSON(results) {
-    if (!results) return
-    const objects = results.rows.map((row) =>
-        Object.fromEntries(
-            results.columns.map((col, i) => [col, Array.isArray(row) ? row[i] : row[col]])
-        )
-    )
-    download(JSON.stringify(objects, null, 2), 'results.json', 'application/json')
-}
-
-function download(content, filename, type) {
-    const blob = URL.createObjectURL(new Blob([content], { type }))
-    const a = Object.assign(document.createElement('a'), { href: blob, download: filename })
-    a.click()
-    URL.revokeObjectURL(blob)
-}
+import { exportCSV, exportJSON } from '../../utils/exportUtils.js'
+import { useFetchNamespaces } from '../../hooks/useFetchNamespaces.js'
 
 function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
     const { level } = useZoomStore()
-    const [namespaces, setNamespaces] = useState([])
+    const namespaces = useFetchNamespaces()
     const isRunning = cell.status === 'running'
     const hasResults = cell.status === 'done' && cell.results
 
-    // Fetch live namespaces from backend (?all=true includes ephemeral DuckDB sources)
-    useEffect(() => {
-        fetch('/namespaces?all=true')
-            .then((r) => (r.ok ? r.json() : []))
-            .then((data) => {
-                if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
-                    setNamespaces(data.map((ns) => ns.name))
-                } else {
-                    setNamespaces(data)
-                }
-            })
-            .catch(() => setNamespaces([]))
-    }, [])
-
     // While the fetch is pending, the cell's saved namespace may not be in the list yet.
-    // Add it as a fallback so the select shows the correct value immediately on load,
-    // instead of falling back to the placeholder during the ping-based fetch.
+    // Add it as a fallback so the select shows the correct value immediately on load.
     const visibleNamespaces =
         cell.namespace && !namespaces.includes(cell.namespace)
             ? [cell.namespace, ...namespaces]
@@ -73,7 +24,7 @@ function CellToolbar({ cell, onRun, onDelete, onNamespaceChange }) {
         flex items-center justify-between
         px-3 py-2
         border-b border-gray-200 dark:border-gray-700
-        bg-gray-50 dark:bg-gray-800
+        bg-gray-50 dark:bg-[#1a2540]
         rounded-t-lg
       "
         >

@@ -90,6 +90,33 @@ const useCellStore = create((set, get) => ({
         set({ cells })
     },
 
+    insertAfter: (afterId, type = 'sql') =>
+        set((state) => {
+            const idx = state.cells.findIndex((c) => c.id === afterId)
+            if (idx === -1) return { cells: [...state.cells, makeCell({ type })] }
+            const next = [...state.cells]
+            next.splice(idx + 1, 0, makeCell({ type }))
+            return { cells: next }
+        }),
+
+    moveUp: (id) =>
+        set((state) => {
+            const idx = state.cells.findIndex((c) => c.id === id)
+            if (idx <= 0) return {}
+            const next = [...state.cells]
+            ;[next[idx - 1], next[idx]] = [next[idx], next[idx - 1]]
+            return { cells: next }
+        }),
+
+    moveDown: (id) =>
+        set((state) => {
+            const idx = state.cells.findIndex((c) => c.id === id)
+            if (idx === -1 || idx >= state.cells.length - 1) return {}
+            const next = [...state.cells]
+            ;[next[idx], next[idx + 1]] = [next[idx + 1], next[idx]]
+            return { cells: next }
+        }),
+
     clearCells: () => set({ cells: [] }),
 
     // draft init

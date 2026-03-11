@@ -39,7 +39,6 @@ public class QueryWebsocket {
      */
     @OnMessage
     public void onMessage(String message, Session session) {
-//        if (message.contains("\"type\":\"ping\"")) return;
         QueryRequest request;
         try {
             // Deserialize the incoming JSON message into a QueryRequest object
@@ -74,7 +73,7 @@ public class QueryWebsocket {
                 }
             });
         } catch (Exception e) {
-            sendMessage(session, QueryResponse.error(cellId, "Faield to submit query: " + e.getMessage()));
+            sendMessage(session, QueryResponse.error(cellId, "Failed to submit query: " + e.getMessage()));
         }
     }
 

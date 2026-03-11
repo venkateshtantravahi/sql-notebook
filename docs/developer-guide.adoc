@@ -6,7 +6,7 @@
 
 == Overview
 
-This guide explains the sql-notebook backend architecture end to end — how the five modules connect, how data flows through the system, and what a developer needs to know to fix bugs or add features confidently.
+This guide explains the sql-notebook backend architecture end to end — how the modules connect, how data flows through the system, and what a developer needs to know to fix bugs or add features confidently.
 
 For per-module API detail, see the individual module docs in the `docs/` directory.
 
@@ -14,30 +14,35 @@ For per-module API detail, see the individual module docs in the `docs/` directo
 
 === Module Dependency Chain
 
-Every request that reaches the browser travels through the following chain:
-
 [source]
 ----
-sql.properties
+sql.properties  /  sources.json
       │
       ▼
- ConfigParser                   reads and validates the config file
+ ConfigParser           reads and validates sql.properties into ConnectionConfig records
       │
       ▼
- ConnectionRegistry             creates one HikariCP pool per namespace
+ ConnectionRegistry     creates one HikariCP pool per namespace; handles hot-add/remove
+      │            ▲
+      │            │  DuckDbRegistrar ─── FileSourceRegistry ─── FileSourceHandler
+      │            │  (file/remote sources register ephemeral namespaces at runtime)
+      ▼
+ QueryExecutor          submits SQL to a thread pool using connections from the registry
       │
       ▼
- QueryExecutor                  submits SQL to a thread pool using pools from the registry
+ HttpServer (Jetty)     exposes all modules over HTTP and WebSocket
       │
-      ▼
- HttpServer (Jetty)             exposes the executor and registry over HTTP and WebSocket
-      │
-      ├── GET  /namespaces       → NamespaceHandler  → ConnectionRegistry.getNamespaces()
-      ├── POST /query            → QueryHandler      → QueryExecutor.execute()
-      └── WS   /ws/query        → QueryWebSocket    → QueryExecutor.execute()
+      ├── GET  /namespaces          → NamespaceHandler     → registry.getNamespaces()
+      ├── ANY  /connections/*       → ConnectionHandler    → registry + ConfigParser
+      ├── POST /query               → QueryHandler         → QueryExecutor.execute()
+      ├── WS   /ws/query            → QueryWebsocket       → QueryExecutor.execute()
+      ├── GET  /schema/*            → SchemaHandler        → registry.getConnection()
+      ├── ANY  /sources/*           → FileSourceHandler    → FileSourceRegistry
+      ├── ANY  /draft               → DraftHandler         → local filesystem
+      └── GET  /browse              → FileBrowserHandler   → local filesystem
 ----
 
-No module knows about the ones above it in the chain. `QueryExecutor` does not know about Jetty. `ConnectionRegistry` does not know about `QueryExecutor`. Each module depends only downward.
+No module knows about the ones above it. `QueryExecutor` does not know about Jetty. `ConnectionRegistry` does not know about `QueryExecutor`. Each module depends only downward.
 
 === Key Classes
 
@@ -46,37 +51,67 @@ No module knows about the ones above it in the chain. `QueryExecutor` does not k
 | Class | Responsibility
 
 | `ConfigParser`
-| Reads `sql.properties`, validates required fields, returns `Map<String, ConnectionConfig>`
+| Reads `sql.properties`, validates required fields, writes and removes namespace blocks.
 
 | `ConnectionConfig`
-| Immutable record: namespace, type, host, port, database, user, password, poolSize
+| Immutable record: namespace, type, host, port, database, username, password, poolSize.
+
+| `JdbcUrlBuilder`
+| Builds JDBC URLs and loads driver classes for all supported types. Shared between `ConnectionRegistry` and `ConnectionHandler`.
 
 | `ConnectionRegistry`
-| Holds one `HikariDataSource` per namespace. Hands out `Connection` objects. Shuts down pools on exit.
+| Holds one `HikariDataSource` per namespace. Handles hot-register, hot-deregister, and ephemeral namespace tracking.
+
+| `ConnectionRegistryException`
+| Thrown for unknown namespace, duplicate namespace, or pool connection failure.
+
+| `DuckDbRegistrar`
+| Registers local files and remote URLs as DuckDB namespaces. Creates `.db` files and view definitions. Sanitises names to valid namespace identifiers.
+
+| `FileSourceRegistry`
+| Persists file/remote sources to `sources.json`. Calls `DuckDbRegistrar` for registration. Rehydrates all sources on startup.
 
 | `QueryExecutor`
-| Wraps a `ExecutorService`. Each `execute(namespace, sql)` call is one task on the pool, returns `Future<QueryResult>`.
+| Wraps a fixed thread pool. Each `execute(namespace, sql)` call is one task, returns `Future<QueryResult>`.
 
 | `QueryResult`
-| Immutable record: namespace, sql, columns, rows, executionTimeMs, success, errorMessage
+| Immutable record: namespace, sql, columns, rows, executionTimeMs, success, errorMessage.
 
 | `HttpServer`
 | Configures and starts embedded Jetty. Mounts all handlers. Owns the server lifecycle.
 
 | `NamespaceHandler`
-| Servlet: `GET /namespaces` → serialises `Set<String>` to JSON
+| `GET /namespaces` — pings each namespace in parallel, returns health status.
+
+| `ConnectionHandler`
+| `CRUD /connections/*` — add, test, update, delete persistent connections.
 
 | `QueryHandler`
-| Servlet: `POST /query` → reads JSON body, calls executor, waits for `Future`, returns `QueryResult` as JSON
+| `POST /query` — synchronous SQL execution over HTTP.
 
-| `QueryWebSocket`
-| `@ServerEndpoint`: receives JSON message, pushes `running` immediately, waits on virtual thread, pushes `done` or `error`
+| `QueryWebsocket`
+| `@ServerEndpoint /ws/query` — async SQL execution, pushes `running` then `done`/`error`.
+
+| `SchemaHandler`
+| `GET /schema/:namespace` — table and column introspection, including FK/PK metadata.
+
+| `FileSourceHandler`
+| `ANY /sources/*` — file upload, remote URL registration, list, delete.
+
+| `DraftHandler`
+| `GET/POST /draft` — atomic notebook draft persistence with backup ring.
+
+| `FileBrowserHandler`
+| `GET /browse` — local filesystem navigation restricted to safe roots.
+
+| `FileUtils`
+| Shared utilities: file extension extraction, path traversal validation.
 
 | `QueryRequest`
-| Immutable record: cellId, namespace, sql (incoming WebSocket message)
+| Immutable record: cellId, namespace, sql (incoming WebSocket message).
 
 | `QueryResponse`
-| Immutable record: cellId, status, result, error (outgoing WebSocket message)
+| Immutable record: cellId, status, result, error (outgoing WebSocket message).
 |===
 
 == Data Flow
@@ -85,7 +120,7 @@ No module knows about the ones above it in the chain. `QueryExecutor` does not k
 
 [source]
 ----
-main()
+App.main()
   │
   ├── ConfigParser.parse("sql.properties")
   │     └── returns Map<String, ConnectionConfig>
@@ -93,13 +128,15 @@ main()
   ├── new ConnectionRegistry(configs)
   │     └── for each namespace → creates HikariDataSource
   │
-  ├── new QueryExecutor(registry)
-  │     └── creates fixed thread pool (size = sum of all pool sizes)
+  ├── new DuckDbRegistrar(registry)
+  ├── new FileSourceRegistry(registrar)
+  │     └── rehydrate() → re-registers all sources from sources.json
   │
-  ├── new HttpServer(registry, executor, 8080)
-  │     ├── mounts NamespaceHandler at /namespaces
-  │     ├── mounts QueryHandler at /query
-  │     └── registers QueryWebSocket at /ws/query
+  ├── new QueryExecutor(registry)
+  │     └── creates fixed thread pool (max(4, namespaceCount × 3))
+  │
+  ├── new HttpServer(registry, sourceRegistry, registrar, executor, 8080)
+  │     └── mounts all handlers
   │
   └── server.start()
         └── Desktop.browse("http://localhost:8080")
@@ -109,46 +146,56 @@ main()
 
 [source]
 ----
-Browser
-  │── POST /query {"namespace":"local","sql":"SELECT 1"} ──►  QueryHandler.doPost()
-                                                                   │
-                                                                   ├── parse JSON body
-                                                                   ├── validate namespace + sql present
-                                                                   │
-                                                                   ├── executor.execute(namespace, sql)
-                                                                   │     └── ConnectionRegistry.getConnection(namespace)
-                                                                   │           └── HikariPool → real JDBC Connection
-                                                                   │     └── statement.executeQuery(sql)
-                                                                   │     └── build QueryResult
-                                                                   │
-                                                                   └── future.get() → wait → write JSON response
-  │◄── 200 OK {columns, rows, executionTimeMs, success} ──────────┘
+Browser ──► POST /query {"namespace":"local","sql":"SELECT 1"}
+                │
+                ├── parse + validate JSON body
+                ├── executor.execute(namespace, sql)
+                │     └── registry.getConnection(namespace) → HikariCP → JDBC Connection
+                │     └── stmt.executeQuery(sql) → ResultSet → QueryResult
+                └── future.get() → write QueryResult as JSON response
+Browser ◄── 200 OK {columns, rows, executionTimeMs, success}
 ----
 
 === WebSocket Query (ws/query)
 
 [source]
 ----
-Browser
-  │── WS connect → /ws/query ────────────────────────────────►  QueryWebSocket.onOpen()
-  │── {"cellId":"cell-1","namespace":"local","sql":"SELECT 1"} ► QueryWebSocket.onMessage()
-                                                                   │
-                                                                   ├── parse message into QueryRequest
-                                                                   ├── sendMessage(session, running)  ← immediate
-                                                                   │
-                                                                   ├── executor.execute(namespace, sql) → Future
-                                                                   │
-                                                                   └── Thread.ofVirtual().start(() → {
-                                                                           result = future.get()       ← waits here
-                                                                           sendMessage(session, done)
-                                                                       })
-  │◄── {"cellId":"cell-1","status":"running"} ─────────────────────┘ (immediate)
-  │◄── {"cellId":"cell-1","status":"done","result":{...}} ──────────┘ (when query finishes)
+Browser ──► WS connect → /ws/query
+Browser ──► {"cellId":"cell-1","namespace":"local","sql":"SELECT 1"}
+                │
+                ├── parse into QueryRequest
+                ├── sendMessage(running)                ← immediate
+                ├── executor.execute(namespace, sql) → Future
+                └── Thread.ofVirtual().start(() → {
+                        result = future.get()           ← waits here, off Jetty thread
+                        sendMessage(done or error)
+                    })
+Browser ◄── {"cellId":"cell-1","status":"running"}
+Browser ◄── {"cellId":"cell-1","status":"done","result":{...}}
+----
+
+=== File Source Registration
+
+[source]
+----
+Browser ──► POST /sources/upload (multipart file)
+                │
+                ├── validate extension + size
+                ├── save to ~/.sqlnotebook/uploads/<filename>
+                └── FileSourceRegistry.addFile(filename)
+                      └── DuckDbRegistrar.registerFile(filename)
+                            ├── sanitise filename → namespace
+                            ├── open/create ~/.sqlnotebook/duckdb/<namespace>.db
+                            ├── INSTALL httpfs; LOAD httpfs
+                            ├── CREATE OR REPLACE VIEW "<namespace>" AS SELECT * FROM read_csv_auto(...)
+                            └── registry.registerEphemeral(config)
+                      └── persist sources.json (atomic write)
+Browser ◄── 201 {"namespace":"sales_csv","filename":"sales_data_csv.csv","kind":"file"}
 ----
 
 === Error Handling Philosophy
 
-There are two distinct types of errors and they are handled differently by design:
+Two distinct error types exist and are handled differently by design:
 
 [cols="1,2,2"]
 |===
@@ -156,63 +203,75 @@ There are two distinct types of errors and they are handled differently by desig
 
 | SQL / DB-level error
 | Invalid table name, syntax error, type mismatch
-| `QueryResult.success = false`, `errorMessage` set. HTTP status 200. WebSocket status `done`.
+| `QueryResult.success = false`, `errorMessage` set. HTTP `200`. WebSocket status `done`.
 
 | Infrastructure error
 | Unknown namespace, missing fields, malformed JSON
 | HTTP 4xx status code. WebSocket status `error`. Never reaches the executor.
 |===
 
-This distinction means the frontend always receives a `QueryResult`-shaped response for SQL execution — it never needs to check HTTP status codes for query errors.
+This distinction means the frontend always receives a `QueryResult`-shaped response for SQL execution. It never needs to check HTTP status codes for query errors — only the `success` field.
 
 == Connection Pooling
 
-Each namespace has its own `HikariDataSource` with a configurable pool size (default: 5). This means:
+Each namespace has its own `HikariDataSource` with a fixed pool size of 5. This means:
 
-- `prod` namespace with pool size 5 → max 5 concurrent queries against `prod`
-- `staging` namespace with pool size 3 → independent, max 3 concurrent queries
-- Namespaces never share connections — one namespace's pool exhaustion cannot block another
+* `prod` namespace → max 5 concurrent queries
+* `analytics` namespace → independent, max 5 concurrent queries
+* Namespaces never share connections — one namespace's pool exhaustion cannot block another
 
-HikariCP returns connections to the pool automatically when the `try-with-resources` block in `QueryExecutor` closes them. Connection leaks are prevented by HikariCP's leak detection timeout.
+HikariCP closes idle connections automatically and detects connection leaks via its leak detection timeout.
 
 == Thread Model
 
 [source]
 ----
 Jetty acceptor threads     → accept HTTP/WebSocket connections
-Jetty handler threads      → run NamespaceHandler, QueryHandler (short-lived)
-QueryExecutor thread pool  → run actual JDBC queries (potentially long-lived)
-Virtual threads            → one per WebSocket query, waits on Future without blocking Jetty
+Jetty handler threads      → run servlet handlers (short-lived per request)
+QueryExecutor thread pool  → run JDBC queries (potentially long-running)
+Virtual threads            → one per WebSocket in-flight query; waits on Future without
+                             blocking a Jetty thread
+NamespaceHandler pool      → bounded fixed pool (max 20) for parallel namespace pings
 ----
 
-The reason virtual threads are used in `QueryWebSocket` is important: Jetty's WebSocket message handler runs on a Jetty-managed thread. If that thread blocks on `future.get()`, Jetty cannot process other messages on the same connection. Virtual threads are cheap enough to create one per in-flight query.
+The reason virtual threads are used in `QueryWebsocket` is important: blocking a Jetty WebSocket message thread on `future.get()` would prevent other messages from being processed on the same connection. Virtual threads are cheap enough that creating one per in-flight query is practical.
 
-== Adding a New Feature
+== Adding Common Features
 
-=== Adding a new REST endpoint
+=== New REST Endpoint
 
-1. Create a new class extending `HttpServlet` in `io.sqlnotebook.server`
-2. Override `doGet` or `doPost`
-3. Register it in `HttpServer` constructor: `context.addServlet(new ServletHolder(new YourHandler(...)), "/your-path")`
-4. Write an integration test in `HttpServerTest` using the same pattern as existing tests
-5. Add a section to `docs/http-server.adoc`
+1. Create a class extending `HttpServlet` in `io.sqlnotebook.server`
+2. Override `doGet`, `doPost`, etc.
+3. Register in `HttpServer`: `context.addServlet(new ServletHolder(new YourHandler(...)), "/your-path/*")`
+4. Write an integration test in `HttpServerTest`
+5. Add an entry to `docs/http-server.adoc`
 
-=== Adding a new database type
+=== New Database Type
 
-1. Add the type string to the allowed list in `ConfigParser.java`
-2. Add the JDBC URL builder branch in `ConnectionRegistry.java`
-3. Add the JDBC driver dependency in `build.gradle.kts`
-4. Add the Testcontainers module dependency in `build.gradle.kts` (`testImplementation`)
-5. Add an integration test in `ConnectionRegistryTest` using a real container
-6. Update `docs/config-parser.adoc` and `sql.properties.example`
+1. Add the type string to `SUPPORTED_TYPES` in `ConfigParser` and `ConnectionHandler`
+2. Add the JDBC URL branch in `JdbcUrlBuilder.buildUrl()`
+3. Add the driver class in `JdbcUrlBuilder.loadDriver()`
+4. Add the JDBC driver dependency in `build.gradle.kts`
+5. Add a Testcontainers module in `build.gradle.kts` (test scope)
+6. Add an integration test in `ConnectionRegistryTest`
+7. Add the schema fetching branch in `SchemaHandler.fetchSchema()`
+8. Update `docs/config-parser.adoc`, `docs/connection-registry.adoc`, `docs/schema.adoc`
+
+=== New File Source Format
+
+1. Add the extension to `NATIVE_EXTENSIONS` or `EXCEL_EXTENSIONS` in `DuckDbRegistrar`
+2. Add the extension and size limit to `SIZE_LIMITS` in `FileSourceHandler`
+3. Add the `readFunction()` branch in `DuckDbRegistrar` for the new extension
+4. Add the extension to `validateExtension()` in `DuckDbRegistrar`
+5. Update `docs/file-sources.adoc`
 
 === Modifying QueryResult
 
-`QueryResult` is a record used across `QueryExecutor`, `QueryHandler`, and `QueryWebSocket`. If you add a field:
+`QueryResult` is a record serialised automatically by Jackson. Adding a field makes it appear in all JSON responses immediately. Update:
 
-- It will automatically appear in JSON responses (Jackson serialises all record components)
-- Update `QueryExecutorTest` assertions if the new field affects test outcomes
-- Update `docs/http-server.adoc` and `docs/websocket.adoc` response examples
+* `QueryExecutorTest` if the new field affects assertions
+* `docs/query-executor.adoc` response shape table
+* `docs/http-server.adoc` and `docs/websocket.adoc` response examples
 
 == Module Documentation Index
 
@@ -221,17 +280,26 @@ The reason virtual threads are used in `QueryWebSocket` is important: Jetty's We
 | Document | Contents
 
 | link:config-parser.adoc[config-parser.adoc]
-| `sql.properties` format, all supported keys, validation rules, error cases
+| `sql.properties` format, field reference, validation rules, `ConfigParser` write/remove methods
 
 | link:connection-registry.adoc[connection-registry.adoc]
-| JDBC URL formats per database type, pool configuration, shutdown behaviour
+| JDBC URL formats, pool configuration, ephemeral namespaces, full method table
 
 | link:query-executor.adoc[query-executor.adoc]
-| Thread pool, `QueryResult` structure, error handling, parallel execution
+| Thread pool sizing, `QueryResult` structure, error handling, parallel execution
 
 | link:http-server.adoc[http-server.adoc]
-| REST endpoints, request/response formats, HTTP error codes
+| All REST endpoints with request/response shapes, error codes, implementation notes
 
 | link:websocket.adoc[websocket.adoc]
-| WebSocket protocol, message schemas, parallel cell execution, JS client example
+| WebSocket protocol, all message types, parallel cell execution, JS client example
+
+| link:file-sources.adoc[file-sources.adoc]
+| File upload, remote URL registration, DuckDB connection model, namespace naming, persistence
+
+| link:schema.adoc[schema.adoc]
+| Schema introspection per database type, FK/PK response shape, adding new DB support
+
+| link:draft.adoc[draft.adoc]
+| Notebook draft persistence, atomic write strategy, backup ring, corruption recovery
 |===

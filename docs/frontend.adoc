@@ -1,0 +1,361 @@
+= Frontend Architecture
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: rouge
+
+== Overview
+
+The frontend is a single-page application built with React 18, Vite, Tailwind v4, Zustand, and CodeMirror 6.
+It communicates with the backend exclusively over two channels:
+
+* **HTTP** — CRUD for connections, file sources, schema, draft persistence, system info, file browsing.
+* **WebSocket** (`/ws/query`) — all SQL query execution, including streaming status updates per cell.
+
+=== Tech Stack
+
+[cols="1,3"]
+|===
+| Tool | Role
+
+| React 18
+| UI rendering. Functional components only, no class components.
+
+| Vite 7
+| Dev server and production bundler. Outputs to `../sql-notebook-core/src/main/resources/static/`.
+
+| Tailwind v4
+| Utility-first CSS. Dark mode via `.dark` class on `<html>`. No custom design tokens defined.
+
+| Zustand
+| Lightweight global state. One store per domain — no Redux-style action/reducer pattern.
+
+| CodeMirror 6
+| SQL editor inside `SqlCell`. Language support, theming, and key bindings configured in `SqlCell.jsx`.
+
+| react-icons
+| All icons. No custom SVGs.
+|===
+
+=== Project Layout
+
+[source]
+----
+frontend/
+  src/
+    main.jsx                  ← React root mount, draft init, autosave
+    App.jsx                   ← Layout composition: Header + Sidebar + MainArea
+    store/
+      useCellStore.js         ← Cell list, query state, draft init/restore
+      useNotebookStore.js     ← Notebook title, dirty flag, draft persistence
+      useSidebarStore.js      ← Active panel, panel width, namespace list
+      useThemeStore.js        ← dark/light theme preference (localStorage)
+      useZoomStore.js         ← Global font zoom (⌘+/−/0)
+      useConfigModalStore.js  ← Open/close ConfigModal, edit connection data
+      useFileSourceModalStore.js ← Open/close FileSourceModal
+    components/
+      layout/
+        Header.jsx            ← Menu bar, title, theme toggle, Config button
+        Sidebar.jsx           ← Icon rail + resizable panel (connections/schema/datasources)
+        MainArea.jsx          ← Scrollable cell list + add cell buttons
+        BottomBar.jsx         ← Namespace health + WebSocket status indicator
+      cell/
+        CellToolbar.jsx       ← Namespace dropdown, Run, export CSV/JSON, delete
+        SqlCell.jsx           ← CodeMirror editor + CellToolbar + ResultsTable
+        MarkdownCell.jsx      ← Edit/preview toggle, markdown source editor
+        ResultsTable.jsx      ← Paginated data grid for query results
+      modal/
+        ConfigModal.jsx       ← Add/edit database connection
+        FileSourceModal.jsx   ← Upload file / add remote URL
+        FileBrowserModal.jsx  ← Server-side filesystem navigator (SQLite picker)
+        KeyboardShortcutsModal.jsx
+        AboutModal.jsx
+      sidebar/
+        SchemaExplorer.jsx    ← Collapsible table/column tree per namespace
+        SchemaErd.jsx         ← FK relationship lines between tables
+      common/
+        FormField.jsx         ← Shared Field + Input components for modal forms
+        StatusMessage.jsx     ← Themed success/error/pending banner
+        SplashScreen.jsx      ← Loading overlay shown while draft loads
+        SqlNotebookLogo.jsx   ← SVG logo mark
+    hooks/
+      useQuerySocket.js       ← Singleton WebSocket; returns runQuery(cellId, ns, sql)
+      useSchema.js            ← Fetches schema for all namespaces; listens for namespace-added
+      useNamespaceRefresh.js  ← Polls /namespaces and writes to useSidebarStore
+      useEscapeKey.js         ← Attaches Escape keydown listener while a modal is open
+      useFetchNamespaces.js   ← One-shot namespace fetch normalised to string[]
+    utils/
+      exportUtils.js          ← download(), exportCSV(), exportJSON()
+      fileUtils.jsx           ← getFileIcon(), formatFileSize()
+----
+
+== State Management
+
+All global state lives in Zustand stores. Stores are imported directly where needed — no React Context wrappers.
+
+=== useCellStore
+
+The primary application store. Holds the ordered cell list and manages query lifecycle state.
+
+[source,js]
+----
+{
+  cells: Cell[],            // ordered array; each cell has a stable numeric id
+  addCell(type),
+  deleteCell(id),
+  updateQuery(id, sql),
+  updateContent(id, markdown),
+  updateNamespace(id, ns),
+  setRunning(id),           // called by useQuerySocket on 'running' status
+  setResults(id, results),  // called by useQuerySocket on 'done' status
+  setError(id, errorMsg),   // called by useQuerySocket on 'error' status
+  getSnapshot(),            // returns serialisable array for notebook save
+  loadSnapshot(snapshots),  // restores from save file, resets status/results
+  clearCells(),
+  initFromDraft(),          // async; called once on app mount
+}
+----
+
+Cell shape:
+
+[source,js]
+----
+{
+  id: number,               // auto-increment, never reused within a session
+  type: 'sql' | 'markdown',
+  query: string,            // SQL source (sql cells)
+  content: string,          // Markdown source (markdown cells)
+  namespace: string | null, // selected backend namespace
+  status: 'idle' | 'running' | 'done' | 'error',
+  results: { columns, rows, rowCount, duration } | null,
+  error: string | null,
+}
+----
+
+=== useNotebookStore
+
+Manages the notebook title, dirty flag, and draft persistence.
+
+[source,js]
+----
+{
+  title: string,
+  savedAt: string | null,   // ISO timestamp of last explicit file save
+  isDirty: boolean,
+  setTitle(title),
+  markSaved(),              // clears isDirty, sets savedAt
+  saveDraft(cellSnapshots), // fire-and-forget POST /draft
+  newNotebook(cellSnapshots),
+  restoreTitle(title),
+}
+----
+
+`saveDraft` is called by the autosave subscriber in `main.jsx`. It subscribes to `useCellStore` and fires after every cell change with a 1.5 s debounce.
+
+=== useSidebarStore
+
+Controls the sidebar icon rail and resizable panel.
+
+[source,js]
+----
+{
+  activePanel: 'connections' | 'schema' | 'datasources' | null,
+  panelWidth: number,       // px width of the expandable panel (default 288)
+  railWidth: number,        // fixed px width of the icon rail (40)
+  namespaces: NamespaceHealth[],  // [{ name, healthy, latencyMs }]
+  selectedNs: string | null,
+  isOpen: boolean,          // derived — true when activePanel !== null
+  setPanel(id),
+  togglePanel(id),
+  toggle(),                 // ⌘B — closes if open, opens connections panel otherwise
+  setNamespaces(list),
+  setSelectedNs(ns),
+}
+----
+
+=== Other Stores
+
+[cols="1,3"]
+|===
+| Store | Responsibility
+
+| `useThemeStore`
+| `theme` ('light'/'dark'), `toggleTheme()`. Persists to `localStorage`. Sets `.dark` on `<html>`.
+
+| `useZoomStore`
+| `level` (1.0 default), `zoomIn()`, `zoomOut()`, `reset()`. Applied as `fontSize: ${level}em` on cells.
+
+| `useConfigModalStore`
+| `isOpen`, `editConnection`, `open()`, `close()`, `openForEdit(connection)`.
+
+| `useFileSourceModalStore`
+| `isOpen`, `open()`, `close()`.
+|===
+
+== Component Hierarchy
+
+[source]
+----
+App
+ ├── Header
+ │    ├── SqlNotebookMark
+ │    ├── NotebookTitle
+ │    ├── Dropdown (File / View / Help menus)
+ │    ├── KeyboardShortcutsModal
+ │    ├── AboutModal
+ │    └── FileSourceModal
+ ├── Sidebar
+ │    ├── icon rail (buttons for each panel)
+ │    └── panel content
+ │         ├── connections panel  ← namespace health list
+ │         ├── schema panel       ← SchemaExplorer + SchemaErd
+ │         └── datasources panel  ← file/remote source list
+ ├── MainArea
+ │    ├── SplashScreen (while draft loads)
+ │    ├── SqlCell[]
+ │    │    ├── CellToolbar
+ │    │    ├── CodeMirror editor
+ │    │    └── ResultsTable
+ │    ├── MarkdownCell[]
+ │    │    └── edit/preview toggle
+ │    └── add cell buttons
+ ├── BottomBar
+ └── ConfigModal
+----
+
+== WebSocket Contract
+
+`useQuerySocket` manages a **module-level singleton** WebSocket connection to `/ws/query`. Because the socket is stored in a module variable (not component state), it survives component re-renders and is shared across all cells.
+
+=== Sending a Query
+
+[source,js]
+----
+const runQuery = useQuerySocket()
+runQuery(cellId, namespace, sql)
+// Sends: { cellId: number, namespace: string, sql: string }
+----
+
+=== Receiving Results
+
+The backend sends two messages per query:
+
+[source,js]
+----
+// Immediately on receipt:
+{ cellId: number, status: 'running' }
+
+// On completion (success or SQL error):
+{ cellId: number, status: 'done', result: { columns, rows, executionTimeMs, success, errorMessage } }
+
+// On infrastructure error (unknown namespace, bad JSON, etc.):
+{ cellId: number, status: 'error', error: string }
+----
+
+`done` with `result.success = false` means a SQL-level error (invalid syntax, table not found). The `result.errorMessage` field contains the database error. This is distinct from `status: 'error'`, which indicates an infrastructure failure before the query reached the database.
+
+=== Reconnection
+
+The hook reconnects with exponential backoff (1 s, 2 s, 4 s) on unexpected close, up to 3 attempts. A ping is sent every 20 seconds to prevent Jetty's 30 s idle timeout from closing the connection. If the connection closes while a query is in-flight, the affected cell is immediately put into the error state.
+
+== Hooks
+
+[cols="2,4"]
+|===
+| Hook | Behaviour
+
+| `useQuerySocket()`
+| Returns `runQuery(cellId, ns, sql)`. Manages singleton WebSocket with backoff reconnect and keep-alive ping.
+
+| `useSchema()`
+| Fetches `GET /namespaces` then `GET /schema/:ns` for each. Re-fetches on `namespace-added` window event. Returns `{ schema, loading, error, refresh }`.
+
+| `useNamespaceRefresh()`
+| Polls `/namespaces` and writes the result into `useSidebarStore.namespaces`. Listens for `namespace-added` to refresh immediately on change.
+
+| `useFetchNamespaces()`
+| One-shot fetch of `/namespaces?all=true` (includes ephemeral DuckDB sources). Normalises the response to `string[]`. Used by `CellToolbar` to populate the namespace dropdown.
+
+| `useEscapeKey(active, onEscape)`
+| Attaches a `keydown` listener while `active` is true. Used by all modals to close on Escape.
+|===
+
+== Utilities
+
+=== exportUtils.js
+
+[source,js]
+----
+download(content, filename, mime)   // creates a temporary object URL and triggers browser download
+exportCSV(results)                  // RFC 4180 CSV from { columns, rows }; triggers download
+exportJSON(results)                 // JSON array of row objects; triggers download
+----
+
+Used by `CellToolbar` for the CSV/JSON export buttons on completed SQL cells.
+
+=== fileUtils.jsx
+
+[source,js]
+----
+getFileIcon(filename)   // returns a react-icons element keyed on file extension
+formatFileSize(bytes)   // formats null/B/KB/MB as a string
+----
+
+Used by `FileSourceModal` (drop zone file preview) and `FileBrowserModal` (file size column).
+
+== Cross-Component Communication
+
+The frontend avoids direct inter-component calls. Coordination happens through:
+
+* **Zustand stores** — the primary mechanism. Components subscribe directly to the slice they need.
+* **`window` custom events** — `namespace-added` is dispatched by `ConfigModal` and `FileSourceModal` after a successful add/edit. `useSchema` and `useNamespaceRefresh` listen for it to refresh without prop-drilling a callback.
+* **`useQuerySocket` return value** — `Header` calls the returned `runQuery` function for Run All (⌘⇧Enter).
+
+== Draft Persistence
+
+On app mount (`main.jsx`), `useCellStore.initFromDraft()` is called once:
+
+* `200` → `loadSnapshot(data.cells)` + `restoreTitle(data.title)` → shows the previous session.
+* `404` → No draft on disk. App starts blank.
+* `204` → Draft is corrupt with no recoverable backup. App starts blank.
+
+After every cell change, a 1.5 s debounced subscriber calls `useNotebookStore.saveDraft(snapshot)`, which fires `POST /draft` to persist the current state. This means the notebook auto-saves continuously to the backend.
+
+Explicit save/open (⌘S / ⌘O) use the browser's **File System Access API** (`showSaveFilePicker` / `showOpenFilePicker`) to write `.sqlnb` files to the local filesystem. These files share the same JSON format as the draft endpoint.
+
+== Adding a New Cell Type
+
+1. Add the type string to the `type` union comment in `useCellStore.js` and handle it in `makeCell`.
+2. Create a new component (e.g. `PythonCell.jsx`) in `components/cell/`. It receives `{ cell, onDelete }` and reads/writes via `useCellStore`.
+3. In `MainArea.jsx`, add a branch in the cell renderer and a matching "Add Python" button.
+4. In `useCellStore.getSnapshot()` and `loadSnapshot()`, include any new fields used by the cell type.
+5. In `Header.jsx`, update `handleExportMarkdown` and `handleExportSQL` if the new cell type should appear in notebook exports.
+
+== Adding a New Sidebar Panel
+
+1. Add the panel `id` to the `activePanel` union in `useSidebarStore.js`.
+2. In `Sidebar.jsx`, add an icon button to the rail (use a `react-icons` icon). Call `togglePanel('your-id')` on click.
+3. Add a branch in the panel content area that renders the new panel's component when `activePanel === 'your-id'`.
+4. Create the panel component in `components/sidebar/`.
+
+== Build and Development
+
+[source,bash]
+----
+# Install dependencies
+npm install
+
+# Start dev server (proxies /api calls to localhost:8080)
+npm run dev
+
+# Production build (outputs to sql-notebook-core/src/main/resources/static/)
+npm run build
+
+# Lint (ESLint, zero warnings)
+npm run lint
+
+# Format check (Prettier)
+npm run format
+----
+
+The Vite dev server proxies all `/namespaces`, `/connections`, `/query`, `/ws`, `/sources`, `/schema`, `/draft`, `/browse`, and `/system` paths to `http://localhost:8080` so the backend can run separately during development.

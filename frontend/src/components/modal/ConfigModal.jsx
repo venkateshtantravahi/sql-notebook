@@ -1,8 +1,11 @@
-import { MdCheckCircle, MdErrorOutline, MdClose } from 'react-icons/md'
+import { MdClose } from 'react-icons/md'
 import { LuFolderOpen } from 'react-icons/lu'
 import { useState, useEffect, useRef } from 'react'
 import useConfigModalStore from '../../store/useConfigModalStore.js'
 import FileBrowserModal from './FileBrowserModal.jsx'
+import { Field, Input } from '../common/FormField.jsx'
+import { StatusMessage } from '../common/StatusMessage.jsx'
+import { useEscapeKey } from '../../hooks/useEscapeKey.js'
 
 const DB_TYPES = [
     { value: 'mysql', label: 'MySQL', defaultPort: 3306, backendType: 'mysql' },
@@ -20,34 +23,6 @@ const EMPTY_FORM = {
     database: '',
     username: '',
     password: '',
-}
-
-function Field({ label, error, children }) {
-    return (
-        <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-400">{label}</label>
-            {children}
-            {error && <span className="text-xs text-red-500 dark:text-red-400">{error}</span>}
-        </div>
-    )
-}
-
-function Input({ className = '', ...props }) {
-    return (
-        <input
-            className={`
-            w-full px-3 py-2 rounded text-sm font-mono
-            bg-gray-50 dark:bg-gray-800
-            border border-gray-200 dark:border-gray-700
-            text-gray-800 dark:text-gray-100
-            placeholder-gray-300 dark:placeholder-gray-600
-            focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400
-            focus:border-transparent transition-colors
-            ${className}
-        `}
-            {...props}
-        />
-    )
 }
 
 function validate(form) {
@@ -120,7 +95,6 @@ function ConfigModal() {
         setShowBrowser(false)
 
         if (isEdit && editConnection) {
-            // Pre-fill form with existing connection data
             setForm({
                 namespace: editConnection.namespace ?? '',
                 type: backendTypeToFormValue(editConnection.type ?? 'mysql'),
@@ -135,14 +109,8 @@ function ConfigModal() {
         }
     }, [isOpen, isEdit, editConnection])
 
-    useEffect(() => {
-        if (!isOpen) return
-        const handle = (e) => {
-            if (e.key === 'Escape' && !showBrowser) close()
-        }
-        document.addEventListener('keydown', handle)
-        return () => document.removeEventListener('keydown', handle)
-    }, [isOpen, close, showBrowser])
+    // Escape closes modal unless the file browser sub-modal is open
+    useEscapeKey(isOpen && !showBrowser, close)
 
     function handleOverlayClick(e) {
         if (e.target === overlayRef.current && !showBrowser) close()
@@ -187,20 +155,14 @@ function ConfigModal() {
             const data = await res.json()
             if (data.success) {
                 setStatus('success')
-                setStatusMsg(
-                    <MdCheckCircle className="inline text-emerald-500" /> +
-                        (data.message ?? 'Connection successful')
-                )
+                setStatusMsg(data.message ?? 'Connection successful')
             } else {
                 setStatus('error')
-                setStatusMsg(
-                    <MdErrorOutline className="inline text-red-500" /> +
-                        (data.message ?? 'Connection failed')
-                )
+                setStatusMsg(data.message ?? 'Connection failed')
             }
         } catch {
             setStatus('error')
-            setStatusMsg('✗ Could not reach backend')
+            setStatusMsg('Could not reach backend')
         }
     }
 
@@ -217,7 +179,6 @@ function ConfigModal() {
             let res, data
 
             if (isEdit) {
-                // PUT /connections/:oldNamespace
                 res = await fetch(`/connections/${editConnection.namespace}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -226,18 +187,14 @@ function ConfigModal() {
                 data = await res.json()
                 if (res.ok) {
                     setStatus('success')
-                    setStatusMsg('✓ Connection updated')
+                    setStatusMsg('Connection updated')
                     window.dispatchEvent(new CustomEvent('namespace-added'))
                     setTimeout(close, 900)
                 } else {
                     setStatus('error')
-                    setStatusMsg(
-                        <MdErrorOutline className="inline text-red-500" /> +
-                            (data.error ?? 'Update failed')
-                    )
+                    setStatusMsg(data.error ?? 'Update failed')
                 }
             } else {
-                // POST /connections/add
                 res = await fetch('/connections/add', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -246,23 +203,20 @@ function ConfigModal() {
                 data = await res.json()
                 if (res.status === 201) {
                     setStatus('success')
-                    setStatusMsg('✓ Connection added')
+                    setStatusMsg('Connection added')
                     window.dispatchEvent(new CustomEvent('namespace-added'))
                     setTimeout(close, 900)
                 } else if (res.status === 409) {
                     setStatus('error')
-                    setStatusMsg('✗ Namespace already exists')
+                    setStatusMsg('Namespace already exists')
                 } else {
                     setStatus('error')
-                    setStatusMsg(
-                        <MdErrorOutline className="inline text-red-500" /> +
-                            (data.error ?? 'Failed to add connection')
-                    )
+                    setStatusMsg(data.error ?? 'Failed to add connection')
                 }
             }
         } catch {
             setStatus('error')
-            setStatusMsg('✗ Could not reach backend')
+            setStatusMsg('Could not reach backend')
         }
     }
 
@@ -277,7 +231,7 @@ function ConfigModal() {
             >
                 <div
                     className="
-                    w-full max-w-md bg-white dark:bg-gray-900
+                    w-full max-w-md bg-white dark:bg-[#161f2e]
                     rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700
                     flex flex-col max-h-[90vh] overflow-y-auto
                 "
@@ -412,19 +366,7 @@ function ConfigModal() {
                             </div>
                         )}
 
-                        {statusMsg && (
-                            <div
-                                className={`text-xs px-3 py-2 rounded font-mono ${
-                                    status === 'success'
-                                        ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'
-                                        : status === 'error'
-                                          ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
-                                          : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'
-                                }`}
-                            >
-                                {statusMsg}
-                            </div>
-                        )}
+                        <StatusMessage status={status} message={statusMsg} />
                     </div>
 
                     {/* Footer */}

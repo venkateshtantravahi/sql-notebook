@@ -96,11 +96,11 @@ function ConnectionsPanel({ deletingNs, onEdit, onDelete, onAddConnection }) {
     return (
         <div className="flex flex-col h-full overflow-hidden">
             <div className="shrink-0 px-3 pt-3 pb-2 flex items-center justify-between border-b border-gray-200 dark:border-gray-800">
-                <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-amber-50">
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
                     Connections
                 </span>
                 <div className="flex items-center gap-1.5">
-                    <span className="text-xs tabular-nums text-gray-400 dark:text-amber-50">
+                    <span className="text-xs tabular-nums text-gray-400 dark:text-gray-500">
                         {namespaces.length > 0 ? `${namespaces.length} active` : ''}
                     </span>
                     <AddBtn onClick={onAddConnection} title="Add connection" />
@@ -108,7 +108,7 @@ function ConnectionsPanel({ deletingNs, onEdit, onDelete, onAddConnection }) {
             </div>
             <div className="flex-1 overflow-y-auto px-2 py-2">
                 {namespaces.length === 0 ? (
-                    <p className="px-1 py-1 text-xs text-gray-400 dark:text-amber-50 italic">
+                    <p className="px-1 py-1 text-xs text-gray-400 dark:text-gray-600 italic">
                         No connections — click + to add one
                     </p>
                 ) : (
@@ -136,8 +136,8 @@ function ConnectionsPanel({ deletingNs, onEdit, onDelete, onAddConnection }) {
                             <span
                                 className={`text-xs font-mono flex-1 truncate ${
                                     selectedNs === ns.name
-                                        ? 'text-blue-700 dark:text-amber-50 font-semibold'
-                                        : 'text-gray-700 dark:text-amber-50'
+                                        ? 'text-blue-700 dark:text-blue-300 font-semibold'
+                                        : 'text-gray-700 dark:text-gray-200'
                                 }`}
                             >
                                 {ns.name}
@@ -148,7 +148,7 @@ function ConnectionsPanel({ deletingNs, onEdit, onDelete, onAddConnection }) {
                                     onEdit(ns.name)
                                 }}
                                 title={`Edit ${ns.name}`}
-                                className="opacity-0 group-hover:opacity-100 shrink-0 w-6 h-6 flex items-center justify-center rounded text-xs text-gray-500 dark:text-amber-50 hover:text-blue-600 dark:hover:text-white hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-all"
+                                className="opacity-0 group-hover:opacity-100 shrink-0 w-6 h-6 flex items-center justify-center rounded text-xs text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-all"
                             >
                                 <MdEdit className="text-gray-500 dark:text-gray-400" />
                             </button>
@@ -159,7 +159,7 @@ function ConnectionsPanel({ deletingNs, onEdit, onDelete, onAddConnection }) {
                                 }}
                                 disabled={deletingNs === ns.name}
                                 title={`Disconnect ${ns.name}`}
-                                className="opacity-0 group-hover:opacity-100 shrink-0 w-6 h-6 flex items-center justify-center rounded text-xs text-gray-500 dark:text-amber-50 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-all disabled:opacity-30"
+                                className="opacity-0 group-hover:opacity-100 shrink-0 w-6 h-6 flex items-center justify-center rounded text-xs text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-all disabled:opacity-30"
                             >
                                 {deletingNs === ns.name ? (
                                     <BsThreeDots className="text-gray-400 dark:text-gray-500" />
@@ -183,7 +183,7 @@ function SchemaPanel() {
     return (
         <div className="flex flex-col h-full overflow-hidden">
             <div className="shrink-0 px-3 py-2 border-b border-gray-200 dark:border-gray-800 flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-amber-50 shrink-0">
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 shrink-0">
                     Schema
                 </span>
                 {namespaces.length > 0 ? (
@@ -318,7 +318,7 @@ function DataSourcesPanel() {
                                 {deletingNs === src.namespace ? (
                                     <BsThreeDots className="text-gray-400 dark:text-gray-500" />
                                 ) : (
-                                    <MdOutlineCancel className="text-gray-400 dark:text-white hover:text-red-800" />
+                                    <MdOutlineCancel className="text-gray-400 dark:text-gray-500" />
                                 )}
                             </button>
                         </div>

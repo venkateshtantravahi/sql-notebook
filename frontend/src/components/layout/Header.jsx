@@ -69,7 +69,7 @@ function SubItem({ item, onClose }) {
                 className="
                 w-full flex items-center justify-between
                 px-3 py-1.5 text-xs
-                text-gray-700 dark:text-amber-50
+                text-gray-700 dark:text-gray-200
                 hover:bg-gray-50 dark:hover:bg-gray-700
                 hover:text-gray-900 dark:hover:text-gray-100
                 transition-colors
@@ -97,7 +97,7 @@ function SubItem({ item, onClose }) {
                             className="
                                 w-full flex items-center
                                 px-3 py-1.5 text-xs
-                                text-gray-700 dark:text-amber-50
+                                text-gray-700 dark:text-gray-200
                                 hover:bg-gray-50 dark:hover:bg-gray-700
                                 hover:text-gray-900 dark:hover:text-gray-100
                                 transition-colors
@@ -132,8 +132,8 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
           text-xs px-3 py-1.5 rounded transition-colors
           ${
               open
-                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-amber-50'
-                  : 'text-gray-500 dark:text-amber-50 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-800' +
+                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                  : 'text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-800' +
                     ' dark:hover:text-gray-100'
           }
         `}
@@ -168,7 +168,7 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
                                 className="
                   w-full flex items-center justify-between
                   px-3 py-1.5 text-xs
-                  text-gray-700 dark:text-amber-50
+                  text-gray-700 dark:text-gray-200
                   hover:bg-gray-50 dark:hover:bg-gray-700
                   hover:text-gray-900 dark:hover:text-gray-100
                   transition-colors
@@ -176,7 +176,7 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
                             >
                                 <span>{item.label}</span>
                                 {item.shortcut && (
-                                    <span className="ml-6 text-gray-400 dark:text-gray-50 font-mono">
+                                    <span className="ml-6 text-gray-400 dark:text-gray-500 font-mono">
                                         {item.shortcut}
                                     </span>
                                 )}
@@ -199,8 +199,6 @@ function NotebookTitle({ onRename, editTriggerRef }) {
 
     useEffect(() => {
         if (editTriggerRef) {
-            // setDraft(title)
-            // setTimeout(() => inputRef.current?.select(), 0)
             editTriggerRef.current = () => setEditing(true)
         }
     }, [editTriggerRef])
@@ -258,12 +256,12 @@ function NotebookTitle({ onRename, editTriggerRef }) {
             )}
             <span
                 className="
-        text-gray-300 dark:text-white
+        text-gray-300 dark:text-gray-600
         group-hover:text-gray-400 dark:group-hover:text-gray-500
         text-xs transition-colors
       "
             >
-                <HiOutlinePencilSquare className="text-gray-400 dark:text-white group-hover:text-gray-500 dark:group-hover:text-gray-400" />
+                <HiOutlinePencilSquare className="text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-400" />
             </span>
         </button>
     )
@@ -565,9 +563,6 @@ ${cellsHtml}
             >
                 {/* Left — logo + app name */}
                 <div className="flex items-center gap-2 w-40">
-                    {/*<div className="w-5 h-5 rounded bg-blue-600 flex items-center justify-center flex-shrink-0">*/}
-                    {/*    <span className="text-white text-xs font-bold">S</span>*/}
-                    {/*</div>*/}
                     <SqlNotebookMark size={28} dark={theme === 'dark'} />
                     <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 tracking-wide whitespace-nowrap">
                         sql-notebook
@@ -601,7 +596,7 @@ ${cellsHtml}
                         onClick={toggleTheme}
                         className="
               text-xs px-3 py-1.5 rounded transition-colors
-              text-gray-500 dark:text-gray-50
+              text-gray-500 dark:text-gray-400
               hover:bg-gray-100 dark:hover:bg-gray-800
               hover:text-gray-700 dark:hover:text-gray-200
             "
