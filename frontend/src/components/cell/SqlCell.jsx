@@ -9,6 +9,7 @@ import CellToolbar from './CellToolbar.jsx'
 import ResultsTable from './ResultsTable.jsx'
 import useZoomStore from '../../store/useZoomStore.js'
 import { useQuerySocket } from '../../hooks/useQuerySocket.js'
+import { useFetchNamespaces } from '../../hooks/useFetchNamespaces.js'
 
 const themeCompartment = new Compartment()
 const fontCompartment = new Compartment()
@@ -32,6 +33,7 @@ function SqlCell({ cell }) {
     const editorRef = useRef(null)
     const viewRef = useRef(null)
     const runQuery = useQuerySocket()
+    const namespaces = useFetchNamespaces()
 
     // Build editor ONCE — theme and font go through Compartments so they
     // can be hot-swapped when the stores change without remounting.
@@ -74,9 +76,24 @@ function SqlCell({ cell }) {
         })
     }, [level])
 
+    function isFederatedQuery(sql) {
+        if (!sql || namespaces.length === 0) return false
+        const pattern = /\b([a-zA-Z_][a-zA-Z0-9_]*)\./g
+        const found = new Set()
+        let m
+        while ((m = pattern.exec(sql)) !== null) {
+            if (namespaces.includes(m[1])) found.add(m[1])
+        }
+        return found.size >= 2
+    }
+
     function handleRun() {
-        if (!cell.namespace || !cell.query.trim()) return
-        runQuery(cell.id, cell.namespace, cell.query.trim())
+        const sql = cell.query.trim()
+        if (!sql) return
+        const federated = isFederatedQuery(sql)
+        if (!federated && !cell.namespace) return
+        // Federated queries send namespace=null — backend routes to FederatedQueryExecutor
+        runQuery(cell.id, federated ? null : cell.namespace, sql)
     }
 
     return (
@@ -89,6 +106,7 @@ function SqlCell({ cell }) {
         >
             <CellToolbar
                 cell={cell}
+                namespaces={namespaces}
                 onRun={handleRun}
                 onDelete={() => deleteCell(cell.id)}
                 onNamespaceChange={(ns) => updateNamespace(cell.id, ns)}

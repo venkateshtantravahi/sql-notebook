@@ -69,7 +69,7 @@ function App() {
 
     // also save draft when title changes — intentionally mount-only, Zustand refs are stable
     useEffect(() => {
-        const unsubscribe = useCellStore.subscribe((newState, prevState) => {
+        const unsubscribe = useNotebookStore.subscribe((newState, prevState) => {
             if (isRestoring.current) return
             if (newState.title === prevState.title) return
 

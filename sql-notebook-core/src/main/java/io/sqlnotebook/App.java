@@ -8,12 +8,15 @@ import io.sqlnotebook.config.ConnectionConfig;
 import io.sqlnotebook.connection.ConnectionRegistry;
 import io.sqlnotebook.duckdb.DuckDbRegistrar;
 import io.sqlnotebook.duckdb.FileSourceRegistry;
+import io.sqlnotebook.duckdb.PinnedViewRegistry;
 import io.sqlnotebook.executor.QueryExecutor;
 import io.sqlnotebook.server.HttpServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.*;
 import java.util.Collections;
 import java.util.Map;
 
@@ -39,6 +42,12 @@ public class App {
     private static final String CONFIG_FILE    = "sql.properties";
 
     public static void main(String[] args) throws Exception {
+        // --clean wipes duckdb/ and uploads/ dev leftovers then exits
+        if (args.length > 0 && args[0].equals("--clean")) {
+            clean();
+            return;
+        }
+
         int port = parsePort(args);
 
         // Step 1 — Persistant JDBC connection
@@ -55,13 +64,17 @@ public class App {
         sourceRegistry.rehydrate();
         log.info("[startup] file source registry ready ({} source(s) rehydrated)", sourceRegistry.list().size());
 
-        // Step 4 — Http server
+        // Step 4 — Pinned view registry (disk-backed DuckDB datasets from federated results)
+        PinnedViewRegistry pinnedRegistry = new PinnedViewRegistry(registry);
+        log.info("[startup] pinned view registry ready ({} pinned dataset(s))", pinnedRegistry.listPinned().size());
+
+        // Step 5 — Http server
         QueryExecutor executor = new QueryExecutor(registry);
-        HttpServer server = new HttpServer(port, registry, executor, sourceRegistry, duckDbRegistrar);
+        HttpServer server = new HttpServer(port, registry, executor, sourceRegistry, duckDbRegistrar, pinnedRegistry);
         server.start();
         log.info("[startup] server listening on http://127.0.0.1:{}", server.getPort());
 
-        // Step 5 - Shutdown hook
+        // Step 6 — Shutdown hook
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             log.info("[shutdown] stopping server...");
             try { server.stop(); } catch (Exception e) {
@@ -72,6 +85,54 @@ public class App {
         }, "shutdown-hook"));
 
         server.join();
+    }
+
+    /**
+     * Wipes accumulated dev/test files from ~/.sqlnotebook/duckdb/ and
+     * ~/.sqlnotebook/uploads/. Drafts and backups are left untouched.
+     * Invoked when the first CLI arg is {@code --clean}.
+     */
+    private static void clean() throws IOException {
+        Path home = Path.of(System.getProperty("user.home")).resolve(".sqlnotebook");
+        Path duckdbDir   = home.resolve("duckdb");
+        Path uploadsDir  = home.resolve("uploads");
+        Path pinnedDir   = home.resolve("pinned");
+        Path sourcesJson = home.resolve("sources.json");
+        Path sourcesTmp  = home.resolve("sources.json.tmp");
+
+        long dbFiles  = deleteContents(duckdbDir);
+        long uploaded = deleteContents(uploadsDir);
+        long pinned   = deleteContents(pinnedDir);
+
+        // Remove sources.json so stale file-source entries don't block re-registration
+        boolean sourcesDeleted = Files.deleteIfExists(sourcesJson);
+        Files.deleteIfExists(sourcesTmp);
+
+        log.info("[clean] deleted {} file(s) from {}", dbFiles,  duckdbDir);
+        log.info("[clean] deleted {} file(s) from {}", uploaded, uploadsDir);
+        log.info("[clean] deleted {} file(s) from {}", pinned,   pinnedDir);
+        if (sourcesDeleted) log.info("[clean] deleted sources.json");
+        log.info("[clean] done — restart the app normally to begin fresh");
+    }
+
+    /**
+     * Deletes all regular files directly inside {@code dir} (non-recursive).
+     * Directories inside are left intact. Returns the count of deleted files.
+     */
+    private static long deleteContents(Path dir) throws IOException {
+        if (!Files.exists(dir)) return 0;
+        try (var stream = Files.walk(dir, 1)) {
+            return stream
+                    .filter(p -> !p.equals(dir))
+                    .filter(Files::isRegularFile)
+                    .peek(p -> {
+                        try { Files.delete(p); }
+                        catch (IOException e) {
+                            log.warn("[clean] could not delete {}: {}", p, e.getMessage());
+                        }
+                    })
+                    .count();
+        }
     }
 
     /**

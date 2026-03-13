@@ -32,6 +32,7 @@ dependencies {
     implementation("jakarta.websocket:jakarta.websocket-api:2.2.0")
     implementation("org.eclipse.jetty.toolchain:jetty-jakarta-servlet-api:5.0.2")
     implementation("ch.qos.logback:logback-classic:1.5.32")
+    implementation("org.apache.calcite:calcite-core:1.38.0")
 
     testImplementation("org.testcontainers:junit-jupiter:1.21.0")
     testImplementation("org.testcontainers:mysql:1.21.4")

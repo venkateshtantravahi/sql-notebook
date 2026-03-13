@@ -9,7 +9,7 @@ import { BsFiletypeJson, BsFiletypeXlsx, BsThreeDots } from 'react-icons/bs'
 import { IoGlobeOutline } from 'react-icons/io5'
 import { TbFileArrowRight, TbFileDatabase, TbFileTypeCsv } from 'react-icons/tb'
 import { FaRegFileAlt, FaRegFolderOpen } from 'react-icons/fa'
-import { LuFileJson, LuPlugZap, LuDatabase, LuPlus } from 'react-icons/lu'
+import { LuFileJson, LuPlugZap, LuDatabase, LuPlus, LuPin, LuPinOff } from 'react-icons/lu'
 import { SiApacheparquet } from 'react-icons/si'
 
 const MIN_WIDTH = 180
@@ -90,8 +90,11 @@ function AddBtn({ onClick, title }) {
 
 // Connections panel
 
-function ConnectionsPanel({ deletingNs, onEdit, onDelete, onAddConnection }) {
+function ConnectionsPanel({ deletingNs, onEdit, onDelete, onAddConnection, pinnedNames }) {
     const { namespaces, selectedNs, setSelectedNs } = useSidebarStore()
+
+    // Pinned datasets live in their own panel — hide them here
+    const connections = namespaces.filter((ns) => !pinnedNames.has(ns.name))
 
     return (
         <div className="flex flex-col h-full overflow-hidden">
@@ -101,18 +104,18 @@ function ConnectionsPanel({ deletingNs, onEdit, onDelete, onAddConnection }) {
                 </span>
                 <div className="flex items-center gap-1.5">
                     <span className="text-xs tabular-nums text-gray-400 dark:text-gray-500">
-                        {namespaces.length > 0 ? `${namespaces.length} active` : ''}
+                        {connections.length > 0 ? `${connections.length} active` : ''}
                     </span>
                     <AddBtn onClick={onAddConnection} title="Add connection" />
                 </div>
             </div>
             <div className="flex-1 overflow-y-auto px-2 py-2">
-                {namespaces.length === 0 ? (
+                {connections.length === 0 ? (
                     <p className="px-1 py-1 text-xs text-gray-400 dark:text-gray-600 italic">
                         No connections — click + to add one
                     </p>
                 ) : (
-                    namespaces.map((ns) => (
+                    connections.map((ns) => (
                         <div
                             key={ns.name}
                             onClick={() => setSelectedNs(ns.name)}
@@ -177,8 +180,11 @@ function ConnectionsPanel({ deletingNs, onEdit, onDelete, onAddConnection }) {
 
 // Schema panel
 
-function SchemaPanel() {
+function SchemaPanel({ pinnedNames }) {
     const { namespaces, selectedNs, setSelectedNs } = useSidebarStore()
+
+    // Pinned datasets are single flat tables — no schema discovery or ERD needed
+    const schemaNamespaces = namespaces.filter((ns) => !pinnedNames.has(ns.name))
 
     return (
         <div className="flex flex-col h-full overflow-hidden">
@@ -186,7 +192,7 @@ function SchemaPanel() {
                 <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 shrink-0">
                     Schema
                 </span>
-                {namespaces.length > 0 ? (
+                {schemaNamespaces.length > 0 ? (
                     <select
                         value={selectedNs ?? ''}
                         onChange={(e) => setSelectedNs(e.target.value)}
@@ -199,7 +205,7 @@ function SchemaPanel() {
                             cursor-pointer
                         "
                     >
-                        {namespaces.map((ns) => (
+                        {schemaNamespaces.map((ns) => (
                             <option key={ns.name} value={ns.name}>
                                 {ns.name}
                             </option>
@@ -329,12 +335,126 @@ function DataSourcesPanel() {
     )
 }
 
+// Pinned Datasets panel
+
+function PinnedPanel() {
+    const [pinned, setPinned] = useState([])
+    const [unpinning, setUnpinning] = useState(null)
+
+    function fetchPinned() {
+        fetch('/pin')
+            .then((r) => (r.ok ? r.json() : { pinned: [] }))
+            .then((data) => setPinned(data.pinned ?? []))
+            .catch(() => setPinned([]))
+    }
+
+    useEffect(() => {
+        fetchPinned()
+    }, [])
+
+    useEffect(() => {
+        window.addEventListener('namespace-added', fetchPinned)
+        return () => window.removeEventListener('namespace-added', fetchPinned)
+    }, [])
+
+    async function handleUnpin(ns, e) {
+        e.stopPropagation()
+        if (!window.confirm(`Unpin "${ns}"?\nThis will delete the stored dataset.`)) return
+        setUnpinning(ns)
+        try {
+            const res = await fetch(`/pin/${ns}`, { method: 'DELETE' })
+            if (res.ok) {
+                setPinned((prev) => prev.filter((n) => n !== ns))
+                window.dispatchEvent(new CustomEvent('namespace-added'))
+            } else {
+                alert('Failed to unpin dataset')
+            }
+        } catch {
+            alert('Could not reach backend')
+        } finally {
+            setUnpinning(null)
+        }
+    }
+
+    return (
+        <div className="flex flex-col h-full overflow-hidden">
+            <div className="shrink-0 px-3 pt-3 pb-2 flex items-center justify-between border-b border-gray-200 dark:border-gray-800">
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                    Pinned Datasets
+                </span>
+                <span className="text-xs tabular-nums text-gray-400 dark:text-gray-500">
+                    {pinned.length > 0 ? pinned.length : ''}
+                </span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-2 py-2">
+                {pinned.length === 0 ? (
+                    <div className="px-2 py-4 text-center">
+                        <LuPin
+                            size={22}
+                            className="mx-auto mb-2 text-gray-300 dark:text-gray-700"
+                        />
+                        <p className="text-xs text-gray-400 dark:text-gray-600 italic leading-relaxed">
+                            No pinned datasets yet.
+                            <br />
+                            Run a federated query and click{' '}
+                            <span className="font-semibold not-italic text-violet-500">Pin</span>.
+                        </p>
+                    </div>
+                ) : (
+                    pinned.map((ns) => (
+                        <div
+                            key={ns}
+                            className="
+                                flex items-center gap-2 px-2 py-1.5 rounded-md mb-0.5
+                                group border border-transparent
+                                hover:bg-violet-50 dark:hover:bg-violet-950/20
+                                transition-colors select-none
+                            "
+                        >
+                            <LuPin
+                                size={12}
+                                className="shrink-0 text-violet-400 dark:text-violet-500"
+                            />
+                            <div className="flex-1 min-w-0">
+                                <span className="block text-xs font-mono font-semibold truncate text-gray-700 dark:text-gray-200">
+                                    {ns}
+                                </span>
+                            </div>
+                            <button
+                                onClick={(e) => handleUnpin(ns, e)}
+                                disabled={unpinning === ns}
+                                title={`Unpin ${ns}`}
+                                className="
+                                    opacity-0 group-hover:opacity-100 shrink-0
+                                    w-6 h-6 flex items-center justify-center rounded
+                                    text-gray-400 dark:text-gray-600
+                                    hover:text-red-500 dark:hover:text-red-400
+                                    hover:bg-red-50 dark:hover:bg-red-950/30
+                                    transition-all disabled:opacity-30
+                                "
+                            >
+                                {unpinning === ns ? (
+                                    <BsThreeDots className="text-gray-400 dark:text-gray-500" />
+                                ) : (
+                                    <LuPinOff size={13} />
+                                )}
+                            </button>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div>
+    )
+}
+
 // Rail items
 
 const RAIL_ITEMS = [
     { id: 'connections', icon: <LuPlugZap size={18} />, label: 'Connections' },
     { id: 'schema', icon: <MdAccountTree size={18} />, label: 'Schema Explorer' },
     { id: 'datasources', icon: <LuDatabase size={18} />, label: 'Data Sources' },
+    { id: 'pinned', icon: <LuPin size={18} />, label: 'Pinned Datasets' },
 ]
 
 // Main Sidebar
@@ -348,26 +468,36 @@ function Sidebar() {
     const openEdit = configStore.openEdit ?? configStore.open ?? (() => {})
 
     const [deletingNs, setDeletingNs] = useState(null)
+    // Set of pinned namespace names — used to filter them out of connections + schema panels
+    const [pinnedNames, setPinnedNames] = useState(new Set())
 
     const dragging = useRef(false)
     const startX = useRef(0)
     const startW = useRef(0)
 
     const fetchNs = useCallback(() => {
-        fetch('/namespaces')
-            .then((r) => (r.ok ? r.json() : []))
-            .then((data) => {
-                const list =
-                    Array.isArray(data) && data.length > 0 && typeof data[0] === 'string'
-                        ? data.map((name) => ({ name, healthy: true, latencyMs: null }))
-                        : data
-                const current = useSidebarStore.getState().selectedNs
-                const names = list.map((n) => n.name)
-                const next = current && names.includes(current) ? current : (list[0]?.name ?? null)
-                setNamespaces(list)
-                setSelectedNs(next)
-            })
-            .catch(() => setNamespaces([]))
+        // Use allSettled so a /pin failure never blanks the connections panel
+        Promise.allSettled([
+            fetch('/namespaces').then((r) => (r.ok ? r.json() : [])),
+            fetch('/pin').then((r) => (r.ok ? r.json() : { pinned: [] })),
+        ]).then(([nsResult, pinResult]) => {
+            const nsData = nsResult.status === 'fulfilled' ? nsResult.value : []
+            const pinData = pinResult.status === 'fulfilled' ? pinResult.value : { pinned: [] }
+
+            const raw = Array.isArray(nsData) ? nsData : []
+            const list =
+                raw.length > 0 && typeof raw[0] === 'string'
+                    ? raw.map((name) => ({ name, healthy: true, latencyMs: null }))
+                    : raw
+
+            setPinnedNames(new Set(pinData.pinned ?? []))
+
+            const current = useSidebarStore.getState().selectedNs
+            const names = list.map((n) => n.name)
+            const next = current && names.includes(current) ? current : (list[0]?.name ?? null)
+            setNamespaces(list)
+            setSelectedNs(next)
+        })
     }, [setNamespaces, setSelectedNs])
 
     useEffect(() => {
@@ -502,10 +632,12 @@ function Sidebar() {
                                 onEdit={handleEdit}
                                 onDelete={handleDelete}
                                 onAddConnection={openNewConnection}
+                                pinnedNames={pinnedNames}
                             />
                         )}
-                        {activePanel === 'schema' && <SchemaPanel />}
+                        {activePanel === 'schema' && <SchemaPanel pinnedNames={pinnedNames} />}
                         {activePanel === 'datasources' && <DataSourcesPanel />}
+                        {activePanel === 'pinned' && <PinnedPanel />}
                     </div>
                 )}
             </aside>

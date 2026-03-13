@@ -4,6 +4,7 @@ import io.sqlnotebook.config.ConnectionConfig;
 import io.sqlnotebook.connection.ConnectionRegistry;
 import io.sqlnotebook.duckdb.DuckDbRegistrar;
 import io.sqlnotebook.duckdb.FileSourceRegistry;
+import io.sqlnotebook.duckdb.PinnedViewRegistry;
 import io.sqlnotebook.executor.QueryExecutor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,7 +50,8 @@ class ConnectionHandlerTest {
         DuckDbRegistrar registrar = new DuckDbRegistrar(registry);
         FileSourceRegistry sourceRegistry = new FileSourceRegistry(registrar);
         QueryExecutor executor = new QueryExecutor(registry);
-        server = new HttpServer(0, registry, executor, sourceRegistry, registrar);
+        PinnedViewRegistry pinnedRegistry = new PinnedViewRegistry(registry, tempDir.resolve("pinned").toString());
+        server = new HttpServer(0, registry, executor, sourceRegistry, registrar, pinnedRegistry);
         server.start();
         port   = server.getPort();
         http   = HttpClient.newHttpClient();

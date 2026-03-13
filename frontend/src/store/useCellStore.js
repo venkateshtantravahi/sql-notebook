@@ -125,28 +125,32 @@ const useCellStore = create((set, get) => ({
     // 204 -> first launch, stay blank
     // error -> log and stay blank (never block app from starting)
     initFromDraft: async () => {
-        try {
+        // Single helper so the retry path reuses the same logic
+        async function attemptFetch() {
             const res = await fetch('/draft')
-
-            if (res.status == 204) {
-                return { title: null }
-            }
-
+            if (res.status === 204) return { title: null }
             if (!res.ok) {
                 console.warn('[draft] GET /draft returned', res.status, '-- starting blank')
                 return { title: null }
             }
-
             const data = await res.json()
-
             if (Array.isArray(data.cells) && data.cells.length > 0) {
                 get().loadSnapshot(data.cells)
             }
-
             return { title: data.title ?? null }
-        } catch (error) {
-            console.warn('[draft] Could not reach backend for draft restore:', error.message)
-            return { title: null }
+        }
+
+        try {
+            return await attemptFetch()
+        } catch {
+            // Backend may not be ready yet (dev restart) — retry once after a short delay
+            try {
+                await new Promise((r) => setTimeout(r, 900))
+                return await attemptFetch()
+            } catch (err) {
+                console.warn('[draft] Could not reach backend for draft restore:', err.message)
+                return { title: null }
+            }
         }
     },
 }))
