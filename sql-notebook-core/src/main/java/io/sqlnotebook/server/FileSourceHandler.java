@@ -257,7 +257,11 @@ public class FileSourceHandler extends HttpServlet {
         String s3AccessKeyId  = nullIfEmpty(body.path("s3AccessKeyId").asText(null));
         String s3SecretKey    = nullIfEmpty(body.path("s3SecretAccessKey").asText(null));
 
-        DuckDbRegistrar.S3Config s3Config = (s3AccessKeyId != null)
+        // Build S3Config whenever ANY s3 field is provided — not just when credentials exist.
+        // This ensures the endpoint is applied even for MinIO setups where the bucket is
+        // accessible with credentials but the user may omit region.
+        boolean hasS3Fields = s3Endpoint != null || s3Region != null || s3AccessKeyId != null;
+        DuckDbRegistrar.S3Config s3Config = hasS3Fields
                 ? new DuckDbRegistrar.S3Config(s3Endpoint, s3Region, s3AccessKeyId, s3SecretKey)
                 : null;
 

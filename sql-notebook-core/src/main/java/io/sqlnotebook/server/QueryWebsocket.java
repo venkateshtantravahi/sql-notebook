@@ -2,6 +2,7 @@ package io.sqlnotebook.server;
 
 import io.sqlnotebook.executor.QueryExecutor;
 import io.sqlnotebook.executor.QueryResult;
+import io.sqlnotebook.federation.FederatedQueryExecutor;
 import jakarta.websocket.*;
 import jakarta.websocket.server.ServerEndpoint;
 import tools.jackson.databind.ObjectMapper;
@@ -11,37 +12,41 @@ import java.util.concurrent.Future;
 
 /**
  * WebSocket endpoint for handling real-time database queries.
- * Allows for asynchronous status updates (e.g., notifying the client when a query starts vs. finishes).
+ *
+ * Routing:
+ *   - {@code namespace} non-null/non-blank → single-namespace path via {@link QueryExecutor}
+ *   - {@code namespace} null/blank         → federated path via {@link FederatedQueryExecutor};
+ *     the executor scans the SQL for registered namespace prefixes and requires ≥ 2.
+ *
+ * Protocol — send:    {@code { cellId, namespace?, sql }}
+ *           receive:  {@code { cellId, status: 'running' | 'done' | 'error', result?, error? }}
  */
 @ServerEndpoint("/ws/query")
 public class QueryWebsocket {
-    /**
-     * Static executor shared across all websocket instances (one instance per connection).
-     */
+
+    /** Shared across all websocket instances (one instance per connection). */
     private static QueryExecutor executor;
+    private static FederatedQueryExecutor federatedExecutor;
     private static final ObjectMapper mapper = new ObjectMapper();
 
-    /**
-     * Called by HttpServer during startup to inject the shared executor.
-     * Jakarta WebSocket creates a new endpoint instance per connection,
-     * so we use a static reference for shared dependencies.
-     */
+    /** Called by HttpServer during startup to inject the shared executor. */
     public static void setExecutor(QueryExecutor queryExecutor) {
         executor = queryExecutor;
+    }
+
+    /** Called by HttpServer during startup to inject the federated executor. */
+    public static void setFederatedExecutor(FederatedQueryExecutor fed) {
+        federatedExecutor = fed;
     }
 
     @OnOpen
     public void onOpen(Session session) {
     }
 
-    /**
-     * Handles incoming WebSocket messages. Parses the query request and initiates execution.
-     */
     @OnMessage
     public void onMessage(String message, Session session) {
         QueryRequest request;
         try {
-            // Deserialize the incoming JSON message into a QueryRequest object
             request = mapper.readValue(message, QueryRequest.class);
         } catch (Exception e) {
             sendMessage(session, QueryResponse.error("unknown", "Invalid message format: " + e.getMessage()));
@@ -49,31 +54,45 @@ public class QueryWebsocket {
         }
 
         String cellId = request.cellId() != null ? request.cellId() : "unknown";
-        // Basic validation for required fields
-        if (request.namespace() == null || request.namespace().isBlank()
-                || request.sql() == null || request.sql().isBlank()) {
-            sendMessage(session, QueryResponse.error(cellId, "'namespace' and 'sql' are required"));
+
+        if (request.sql() == null || request.sql().isBlank()) {
+            sendMessage(session, QueryResponse.error(cellId, "'sql' is required"));
             return;
         }
 
-        // Immediately push "running" so the UI can show a spinner
+        boolean isFederated = request.namespace() == null || request.namespace().isBlank();
+
+        // Push "running" immediately so the UI shows a spinner
         sendMessage(session, QueryResponse.running(cellId));
 
-        // Submit query asynchronously - do not block Websocket message thread
-        try {
-            Future<QueryResult> future = executor.execute(request.namespace(), request.sql());
-
-            // Run the wait in a separate thread so other messages can still be processed
-            Thread.ofVirtual().start(() -> {
-                try {
-                    QueryResult result = future.get();
-                    sendMessage(session, QueryResponse.done(cellId, result));
-                } catch (Exception e) {
-                    sendMessage(session, QueryResponse.error(cellId, "Execution failed: " + e.getMessage()));
-                }
-            });
-        } catch (Exception e) {
-            sendMessage(session, QueryResponse.error(cellId, "Failed to submit query: " + e.getMessage()));
+        if (isFederated) {
+            try {
+                Future<QueryResult> future = federatedExecutor.execute(request.sql());
+                Thread.ofVirtual().start(() -> {
+                    try {
+                        QueryResult result = future.get();
+                        sendMessage(session, QueryResponse.done(cellId, result));
+                    } catch (Exception e) {
+                        sendMessage(session, QueryResponse.error(cellId, "Federation failed: " + e.getMessage()));
+                    }
+                });
+            } catch (Exception e) {
+                sendMessage(session, QueryResponse.error(cellId, "Failed to submit federated query: " + e.getMessage()));
+            }
+        } else {
+            try {
+                Future<QueryResult> future = executor.execute(request.namespace(), request.sql());
+                Thread.ofVirtual().start(() -> {
+                    try {
+                        QueryResult result = future.get();
+                        sendMessage(session, QueryResponse.done(cellId, result));
+                    } catch (Exception e) {
+                        sendMessage(session, QueryResponse.error(cellId, "Execution failed: " + e.getMessage()));
+                    }
+                });
+            } catch (Exception e) {
+                sendMessage(session, QueryResponse.error(cellId, "Failed to submit query: " + e.getMessage()));
+            }
         }
     }
 
@@ -86,9 +105,6 @@ public class QueryWebsocket {
         sendMessage(session, QueryResponse.error("unknown", "WebSocket error: " + thr.getMessage()));
     }
 
-    /**
-     * Utility to serialize and send a QueryResponse object over the WebSocket.
-     */
     private void sendMessage(Session session, QueryResponse response) {
         if (!session.isOpen()) return;
         try {

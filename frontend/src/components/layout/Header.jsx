@@ -191,7 +191,7 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
 
 // editable notebook title
 
-function NotebookTitle({ onRename, editTriggerRef }) {
+function NotebookTitle({ editTriggerRef }) {
     const { title, isDirty, setTitle } = useNotebookStore()
     const [editing, setEditing] = useState(false)
     const [draft, setDraft] = useState(title)
@@ -207,7 +207,6 @@ function NotebookTitle({ onRename, editTriggerRef }) {
         const trimmed = draft.trim()
         if (trimmed && trimmed !== title) {
             setTitle(trimmed)
-            onRename?.()
         }
         setEditing(false)
     }
@@ -571,12 +570,7 @@ ${cellsHtml}
 
                 {/* Center — notebook title inline with menus */}
                 <div className="flex items-center gap-1">
-                    <NotebookTitle
-                        onRename={() => {
-                            fileHandleRef.current = null
-                        }}
-                        editTriggerRef={titleEditRef}
-                    />
+                    <NotebookTitle editTriggerRef={titleEditRef} />
                     <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
                     {Object.entries(MENUS).map(([label, items]) => (
                         <Dropdown

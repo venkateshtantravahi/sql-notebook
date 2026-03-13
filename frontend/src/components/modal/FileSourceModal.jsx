@@ -233,14 +233,13 @@ function RemoteSourceTab({ onSuccess }) {
         const body = {
             url: form.url.trim(),
             label: form.label.trim() || undefined,
-        }
-        if (showS3 && (form.s3Endpoint || form.s3AccessKeyId)) {
-            body.s3Config = {
-                endpoint: form.s3Endpoint.trim() || undefined,
-                region: form.s3Region.trim() || undefined,
-                accessKeyId: form.s3AccessKeyId.trim() || undefined,
-                secretAccessKey: form.s3SecretAccessKey.trim() || undefined,
-            }
+            ...(showS3 &&
+                (form.s3Endpoint || form.s3AccessKeyId) && {
+                    s3Endpoint: form.s3Endpoint.trim() || undefined,
+                    s3Region: form.s3Region.trim() || undefined,
+                    s3AccessKeyId: form.s3AccessKeyId.trim() || undefined,
+                    s3SecretAccessKey: form.s3SecretAccessKey.trim() || undefined,
+                }),
         }
 
         try {

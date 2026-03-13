@@ -15,13 +15,27 @@ function useSchema() {
             setLoading(true)
             setError(null)
 
-            const nsResp = await fetch('/namespaces')
-            if (!nsResp.ok) throw new Error('Failed to fetch namespaces')
-            const raw = await nsResp.json()
+            // Fetch namespaces and pinned list together — pinned datasets are single flat
+            // tables with no meaningful schema or ERD, so we exclude them entirely.
+            const [nsResult, pinResult] = await Promise.allSettled([
+                fetch('/namespaces').then((r) => {
+                    if (!r.ok) throw new Error('Failed to fetch namespaces')
+                    return r.json()
+                }),
+                fetch('/pin').then((r) => (r.ok ? r.json() : { pinned: [] })),
+            ])
 
-            // /namespaces now returns health objects [{name, healthy, latencyMs}]
-            // Extract just the name strings for schema fetching
-            const namespaces = raw.map((ns) => (typeof ns === 'string' ? ns : ns.name))
+            if (nsResult.status === 'rejected')
+                throw new Error(nsResult.reason?.message ?? 'Failed to fetch namespaces')
+
+            const raw = nsResult.value
+            const pinnedSet = new Set(
+                pinResult.status === 'fulfilled' ? (pinResult.value.pinned ?? []) : []
+            )
+
+            const namespaces = raw
+                .map((ns) => (typeof ns === 'string' ? ns : ns.name))
+                .filter((name) => !pinnedSet.has(name))
 
             if (namespaces.length === 0) {
                 setSchema([])

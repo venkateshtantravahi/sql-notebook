@@ -15,6 +15,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
 import java.util.Locale;
+import java.util.Properties;
 import java.util.Set;
 
 /**
@@ -134,13 +135,25 @@ public class DuckDbRegistrar {
         String jdbcUrl = "jdbc:duckdb:" + dbFile;
         String ext = inferRemoteExtension(url);
 
-        initialiseRemote(jdbcUrl, url, sanitised, ext, s3Config);
+        // Build S3 props first — the init connection needs them too, because DuckDB
+        // performs schema inference (reads the remote file) during CREATE VIEW.
+        Properties s3JdbcProps = buildS3JdbcProperties(s3Config);
+        initialiseRemote(jdbcUrl, url, sanitised, ext, s3JdbcProps);
 
         ConnectionConfig config = new ConnectionConfig(
                 sanitised, "duckdb", "localhost", 0,
                 dbFile, "", "", 4
         );
-        registry.registerEphemeral(config);
+
+        // S3 credentials must be present on every pooled connection, not just the init
+        // connection. We achieve this by passing them as JDBC properties to HikariCP —
+        // DuckDB's JDBC driver accepts all DuckDB config options (including s3_*) as
+        // connection properties and applies them at the session level on each new connection.
+        if (s3JdbcProps.isEmpty()) {
+            registry.registerEphemeral(config);
+        } else {
+            registry.registerEphemeralWithProperties(config, s3JdbcProps);
+        }
 
         log.info("[duckdb] registered remote source '{}' as namespace '{}'", url, sanitised);
         return sanitised;
@@ -267,10 +280,14 @@ public class DuckDbRegistrar {
                 stmt.execute("INSTALL excel; LOAD excel;");
             }
 
-            // Create a persistance view over the source file
+            // Create a persistent view over the source file.
+            // The namespace-named view supports regular single-namespace queries.
+            // The "data" alias supports federation SQL: SELECT * FROM ns.data JOIN other.data
             String readFn = readFunction(srcFile, ext);
             stmt.execute("CREATE OR REPLACE VIEW \"%s\" AS SELECT * FROM %s"
                     .formatted(namespace, readFn));
+            stmt.execute("CREATE OR REPLACE VIEW \"data\" AS SELECT * FROM %s"
+                    .formatted(readFn));
 
             log.debug("[duckdb] initialised '{}' with view '{}'", srcFile, namespace);
         } catch (Exception e) {
@@ -282,33 +299,26 @@ public class DuckDbRegistrar {
 
     /**
      * Initialise a DuckDB database for a remote HTTP/S3 source.
+     *
+     * jdbcProps carries S3/MinIO credentials (s3_endpoint, s3_access_key_id, etc.)
+     * so that the schema-inference step inside CREATE VIEW can actually reach the
+     * remote file. Without these on the init connection, DuckDB tries AWS default
+     * credential resolution and fails with HTTP 403 for private or non-AWS buckets.
      */
-    private void initialiseRemote(String jdbcUrl, String url, String namespace, String ext, S3Config s3) {
-        try (Connection conn = DriverManager.getConnection(jdbcUrl);
-        Statement stmt = conn.createStatement()) {
-            stmt.execute("INSTALL httpfs; LOAD httpfs;");
+    private void initialiseRemote(String jdbcUrl, String url, String namespace, String ext,
+                                   Properties jdbcProps) {
+        try (Connection conn = DriverManager.getConnection(jdbcUrl, jdbcProps);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("INSTALL httpfs");
+            stmt.execute("LOAD httpfs");
 
-            if (s3 != null) {
-                if (s3.endpoint() != null && !s3.endpoint().isBlank()) {
-                    stmt.execute("SET s3_endpoint='%s';".formatted(s3.endpoint()));
-                }
-                if (s3.region() != null && !s3.region().isBlank()) {
-                    stmt.execute("SET s3_region='%s';".formatted(s3.region()));
-                }
-                if (s3.accessKeyId() != null && !s3.accessKeyId().isBlank()) {
-                    stmt.execute("SET s3_access_key_id='%s';".formatted(s3.accessKeyId()));
-                    stmt.execute("SET s3_secret_access_key='%s';".formatted(s3.secretAccessKey()));
-                }
-                // Force path-style for MinIO and other non-AWS providers
-                if (s3.endpoint() != null && !s3.endpoint().isBlank()) {
-                    stmt.execute("SET s3_url_style='path';");
-                }
-            }
-
-            // Create view over the remote URL
+            // Create views over the remote URL — namespace-named for regular queries,
+            // "data" alias for federation SQL: SELECT * FROM ns.data JOIN other.data
             String readFn = readFunction(url, ext);
             stmt.execute("CREATE OR REPLACE VIEW \"%s\" AS SELECT * FROM %s"
                     .formatted(namespace, readFn));
+            stmt.execute("CREATE OR REPLACE VIEW \"data\" AS SELECT * FROM %s"
+                    .formatted(readFn));
 
             log.debug("[duckdb] initialised remote '{}' as view '{}'", url, namespace);
 
@@ -333,8 +343,9 @@ public class DuckDbRegistrar {
             case "parquet"            -> "read_parquet(%s)".formatted(q);
             case "arrow"              -> "read_arrow(%s)".formatted(q);
             case "xlsx", "xls"        -> "read_xlsx(%s)".formatted(q);
-            // For unknown extensions fall back to DuckDB's auto-detection
-            default                  -> "read_auto(%s)".formatted(q);
+            // read_auto does not exist in DuckDB 1.x — fall back to csv auto-detect
+            // which handles TSV and most delimited text formats via sniffing
+            default                   -> "read_csv_auto(%s)".formatted(q);
         };
     }
 
@@ -354,12 +365,51 @@ public class DuckDbRegistrar {
     }
 
     /**
+     * Builds JDBC connection properties for S3/MinIO sources.
+     *
+     * DuckDB's JDBC driver passes all Properties entries as DuckDB configuration
+     * options at session initialisation. Providing s3_* settings here means every
+     * connection that HikariCP opens carries the correct endpoint/credentials —
+     * this is the only reliable way to ensure S3 config is present at query time,
+     * since session-level SET statements and in-memory secrets are lost when the
+     * init connection closes and HikariCP opens a fresh pooled connection.
+     */
+    private Properties buildS3JdbcProperties(S3Config s3) {
+        Properties props = new Properties();
+        if (s3 == null) return props;
+
+        if (s3.endpoint() != null && !s3.endpoint().isBlank()) {
+            // DuckDB expects host:port — strip any protocol prefix
+            props.setProperty("s3_endpoint", s3.endpoint().replaceFirst("^https?://", ""));
+            props.setProperty("s3_url_style", "path");
+            if (s3.endpoint().startsWith("http://")) {
+                props.setProperty("s3_use_ssl", "false");
+            }
+        }
+        if (s3.region() != null && !s3.region().isBlank()) {
+            props.setProperty("s3_region", s3.region());
+        }
+        if (s3.accessKeyId() != null && !s3.accessKeyId().isBlank()) {
+            props.setProperty("s3_access_key_id", s3.accessKeyId());
+            props.setProperty("s3_secret_access_key",
+                    s3.secretAccessKey() != null ? s3.secretAccessKey() : "");
+        }
+        return props;
+    }
+
+    /**
      * Infer file extension from a remote URL for read function selection.
+     * Strips compression suffixes (.gz, .bz2, .zst) first so that
+     * "title.crew.tsv.gz" correctly resolves to "tsv" rather than "gz".
      * Falls back to "parquet" as the most common remote format.
      */
     private String inferRemoteExtension(String url) {
         // Strip query string
         String path = url.contains("?") ? url.substring(0, url.indexOf('?')) : url;
+        // Strip known compression suffixes to get the real format extension
+        if (path.endsWith(".gz") || path.endsWith(".bz2") || path.endsWith(".zst")) {
+            path = path.substring(0, path.lastIndexOf('.'));
+        }
         int dot = path.lastIndexOf('.');
         if (dot < 0 || dot < path.lastIndexOf('/')) return "parquet";
         return path.substring(dot + 1).toLowerCase(Locale.ROOT);

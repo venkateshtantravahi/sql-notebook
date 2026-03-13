@@ -3,7 +3,9 @@ package io.sqlnotebook.server;
 import io.sqlnotebook.connection.ConnectionRegistry;
 import io.sqlnotebook.duckdb.DuckDbRegistrar;
 import io.sqlnotebook.duckdb.FileSourceRegistry;
+import io.sqlnotebook.duckdb.PinnedViewRegistry;
 import io.sqlnotebook.executor.QueryExecutor;
+import io.sqlnotebook.federation.FederatedQueryExecutor;
 import org.eclipse.jetty.ee10.websocket.jakarta.server.config.JakartaWebSocketServletContainerInitializer;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
@@ -31,6 +33,9 @@ import org.eclipse.jetty.server.ServerConnector;
  *   POST   /sources/remote      — register HTTP/S3 URL as DuckDB namespace
  *   GET    /sources             — list all file/remote sources
  *   DELETE /sources/:namespace  — remove file/remote source
+ *   POST   /pin                 — materialise federated result as pinned dataset
+ *   GET    /pin                 — list pinned datasets
+ *   DELETE /pin/:namespace      — unpin and delete dataset
  *   WS     /ws                  — query WebSocket
  */
 public class HttpServer {
@@ -46,13 +51,15 @@ public class HttpServer {
      * @param sourceRegistry File/remote source registry for the data source feature.
      */
     public HttpServer(int port, ConnectionRegistry registry, QueryExecutor executor,
-                      FileSourceRegistry sourceRegistry,  DuckDbRegistrar registrar) {
+                      FileSourceRegistry sourceRegistry, DuckDbRegistrar registrar,
+                      PinnedViewRegistry pinnedRegistry) {
         server = new Server();
         ServerConnector connector = new ServerConnector(server);
         connector.setHost("127.0.0.1");
         connector.setPort(port);
         server.addConnector(connector);
         QueryWebsocket.setExecutor(executor);
+        QueryWebsocket.setFederatedExecutor(new FederatedQueryExecutor(registry));
 
         ServletContextHandler context = new ServletContextHandler();
         context.setContextPath("/");
@@ -64,6 +71,7 @@ public class HttpServer {
         context.addServlet(new ServletHolder(new SystemHandler()),            "/system/*");
         context.addServlet(new ServletHolder(new FileBrowserHandler()),         "/files/*");
         context.addServlet(new ServletHolder(new FileSourceHandler(sourceRegistry, registrar)), "/sources/*");
+        context.addServlet(new ServletHolder(new PinHandler(pinnedRegistry)), "/pin/*");
         ServletHolder connectionHolder = new ServletHolder(new ConnectionHandler(registry));
         context.addServlet(connectionHolder, "/connections/*");
 

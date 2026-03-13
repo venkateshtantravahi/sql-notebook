@@ -5,12 +5,13 @@ import com.zaxxer.hikari.HikariDataSource;
 import io.sqlnotebook.config.ConnectionConfig;
 import io.sqlnotebook.connection.JdbcUrlBuilder;
 
+import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -32,6 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ConnectionRegistry {
 
     private final Map<String, HikariDataSource> pools = new ConcurrentHashMap<>();
+    private final Map<String, ConnectionConfig> configMap = new ConcurrentHashMap<>();
     private final Set<String> ephemeralNamespaces = ConcurrentHashMap.newKeySet();
     /**
      * Initializes the registry by creating a connection pool for every provided configuration.
@@ -41,6 +43,7 @@ public class ConnectionRegistry {
     public ConnectionRegistry(Map<String, ConnectionConfig> configs) {
         for (ConnectionConfig config : configs.values()) {
             pools.put(config.namespace(), buildPool(config));
+            configMap.put(config.namespace(), config);
         }
     }
 
@@ -59,6 +62,7 @@ public class ConnectionRegistry {
             );
         }
         pools.put(config.namespace(), buildPool(config));
+        configMap.put(config.namespace(), config);
     }
 
     /**
@@ -74,6 +78,27 @@ public class ConnectionRegistry {
     }
 
     /**
+     * Hot-register an ephemeral namespace with extra JDBC properties applied to
+     * every connection in the pool.
+     *
+     * Used for S3/MinIO DuckDB sources where credentials (s3_endpoint,
+     * s3_access_key_id, etc.) must be present on every pooled connection —
+     * not just the init connection — because DuckDB reads them when the
+     * httpfs extension resolves the S3 URL at query time.
+     *
+     * @param config     the connection configuration to register
+     * @param jdbcProps  extra properties passed to every JDBC connection
+     */
+    public void registerEphemeralWithProperties(ConnectionConfig config, Properties jdbcProps) {
+        if (pools.containsKey(config.namespace())) {
+            throw new ConnectionRegistryException("Namespace already registered: " + config.namespace());
+        }
+        pools.put(config.namespace(), buildPoolWithProperties(config, jdbcProps));
+        configMap.put(config.namespace(), config);
+        ephemeralNamespaces.add(config.namespace());
+    }
+
+    /**
      * Remove a namespace from the registry and close its connection pool.
      * Safe to call concurrently — pool is closed after removal from the map.
      *
@@ -85,6 +110,7 @@ public class ConnectionRegistry {
         if (pool == null) {
             throw new ConnectionRegistryException("Unknown namespace: " + namespace);
         }
+        configMap.remove(namespace);
         ephemeralNamespaces.remove(namespace);
         pool.close();
     }
@@ -146,9 +172,38 @@ public class ConnectionRegistry {
      * Closes all pools and clears the registry.
      * Call during application shutdown.
      */
+    /**
+     * Returns the raw {@link DataSource} for a namespace — used by Calcite's
+     * JdbcSchema to create federated sub-schemas without borrowing a connection.
+     *
+     * @throws ConnectionRegistryException if the namespace is unknown
+     */
+    public DataSource getDataSource(String namespace) {
+        HikariDataSource pool = pools.get(namespace);
+        if (pool == null) {
+            throw new ConnectionRegistryException("Unknown namespace: " + namespace);
+        }
+        return pool;
+    }
+
+    /**
+     * Returns the {@link ConnectionConfig} for a namespace — used by
+     * FederatedQueryExecutor to select the correct SQL dialect per source.
+     *
+     * @throws ConnectionRegistryException if the namespace is unknown
+     */
+    public ConnectionConfig getConfig(String namespace) {
+        ConnectionConfig config = configMap.get(namespace);
+        if (config == null) {
+            throw new ConnectionRegistryException("Unknown namespace: " + namespace);
+        }
+        return config;
+    }
+
     public void shutdown() {
         pools.values().forEach(HikariDataSource::close);
         pools.clear();
+        configMap.clear();
         ephemeralNamespaces.clear();
     }
 
@@ -156,6 +211,12 @@ public class ConnectionRegistry {
 
     private HikariDataSource buildPool(ConnectionConfig config) {
         return new HikariDataSource(buildHikariConfig(config));
+    }
+
+    private HikariDataSource buildPoolWithProperties(ConnectionConfig config, Properties jdbcProps) {
+        HikariConfig hikari = buildHikariConfig(config);
+        jdbcProps.forEach((k, v) -> hikari.addDataSourceProperty(k.toString(), v.toString()));
+        return new HikariDataSource(hikari);
     }
 
     private HikariConfig buildHikariConfig(ConnectionConfig config) {
