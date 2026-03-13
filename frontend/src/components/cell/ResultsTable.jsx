@@ -1,5 +1,11 @@
 import { CgSpinner } from 'react-icons/cg'
-import { LuChevronsLeft, LuChevronLeft, LuChevronRight, LuChevronsRight } from 'react-icons/lu'
+import {
+    LuChevronsLeft,
+    LuChevronLeft,
+    LuChevronRight,
+    LuChevronsRight,
+    LuTriangleAlert,
+} from 'react-icons/lu'
 import { useState, useEffect } from 'react'
 
 const PAGE_SIZE = 100
@@ -57,6 +63,20 @@ function ResultsTable({ results, error, status }) {
 
     return (
         <div className="border-t border-gray-200 dark:border-gray-700">
+            {/* Truncation warning — shown when backend capped the result set */}
+            {results.truncated && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800">
+                    <LuTriangleAlert
+                        size={12}
+                        className="shrink-0 text-amber-500 dark:text-amber-400"
+                    />
+                    <span className="text-xs text-amber-700 dark:text-amber-300">
+                        Results truncated to 10,000 rows — add a{' '}
+                        <code className="font-mono">LIMIT</code> or{' '}
+                        <code className="font-mono">WHERE</code> clause to narrow down.
+                    </span>
+                </div>
+            )}
             {/* Results meta */}
             <div
                 className="
@@ -70,7 +90,7 @@ function ResultsTable({ results, error, status }) {
                     Results
                 </span>
                 <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">
-                    {totalRows.toLocaleString()} rows . {results.duration}ms
+                    {totalRows.toLocaleString()} rows · {results.duration}ms
                 </span>
             </div>
 

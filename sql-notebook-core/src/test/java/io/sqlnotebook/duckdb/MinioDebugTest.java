@@ -6,6 +6,9 @@ import io.sqlnotebook.connection.ConnectionRegistry;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URI;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -15,6 +18,7 @@ import java.util.Collections;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Integration tests for the MinIO / S3 → DuckDB registration path.
@@ -45,6 +49,27 @@ class MinioDebugTest {
     @BeforeAll
     static void setup() {
         jdbcUrl = "jdbc:duckdb:" + tempDir.resolve("minio_debug.db");
+        assumeTrue(isMinioReachable(),
+                "MinIO not reachable at " + TEST_ENDPOINT + " — skipping S3 integration tests");
+    }
+
+    /**
+     * Returns true if the MinIO endpoint responds within 2 seconds.
+     * Used to skip the entire test class in CI where MinIO is not running.
+     */
+    private static boolean isMinioReachable() {
+        try {
+            HttpURLConnection conn = (HttpURLConnection)
+                    URI.create(TEST_ENDPOINT).toURL().openConnection();
+            conn.setConnectTimeout(2_000);
+            conn.setReadTimeout(2_000);
+            conn.setRequestMethod("HEAD");
+            conn.connect();
+            conn.disconnect();
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     @Test

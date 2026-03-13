@@ -13,23 +13,24 @@ import java.util.concurrent.Future;
 /**
  * Handles asynchronous execution of SQL queries against registered databases.
  *
- * Thread pool size is calculated automatically from the number of registered
- * namespaces — no user configuration required. Formula: max(4, namespaceCount * 3)
- * This gives at least 4 threads with room for 3 concurrent queries per namespace.
+ * Uses a virtual-thread-per-task executor so JDBC blocking calls never pin
+ * platform threads. Pool size is therefore unbounded but the HikariCP pools
+ * in ConnectionRegistry act as the real concurrency gate.
+ *
+ * Row limit:
+ *   Results are capped at ROW_LIMIT rows. When the cap is hit, QueryResult
+ *   carries truncated=true so the frontend can show a warning banner.
  */
 public class QueryExecutor {
+
+    static final int ROW_LIMIT = 10_000;
 
     private final ConnectionRegistry registry;
     private final ExecutorService threadPool;
 
-    /**
-     * Creates an executor with a smart thread pool sized to the registry.
-     *
-     * @param registry The source of database connections.
-     */
     public QueryExecutor(ConnectionRegistry registry) {
         this.registry   = registry;
-        this.threadPool = Executors.newFixedThreadPool(calculatePoolSize(registry));
+        this.threadPool = Executors.newVirtualThreadPerTaskExecutor();
     }
 
     /**
@@ -53,29 +54,17 @@ public class QueryExecutor {
         threadPool.shutdown();
     }
 
-    /**
-     * Calculates thread pool size from namespace count.
-     * min ensures we always have at least 4 threads even with 0 or 1 namespaces.
-     */
-    private static int calculatePoolSize(ConnectionRegistry registry) {
-        int namespaceCount = registry.getNamespaces().size();
-        return Math.max(4, namespaceCount * 3);
-    }
-
-    /**
-     * Executes the query and captures results or errors into a QueryResult.
-     * All JDBC resources are closed automatically via try-with-resources.
-     */
     private QueryResult runQuery(String namespace, String sql) {
         long start = System.currentTimeMillis();
         try (Connection conn = registry.getConnection(namespace);
              Statement  stmt = conn.createStatement();
              ResultSet  rs   = stmt.executeQuery(sql)) {
 
-            List<String>       columns = extractColumns(rs);
-            List<List<Object>> rows    = extractRows(rs);
+            List<String>       columns   = extractColumns(rs);
+            boolean[]          truncated = {false};
+            List<List<Object>> rows      = extractRows(rs, truncated);
             long elapsed = System.currentTimeMillis() - start;
-            return QueryResult.success(namespace, sql, columns, rows, elapsed);
+            return QueryResult.success(namespace, sql, columns, rows, elapsed, truncated[0]);
 
         } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - start;
@@ -92,11 +81,15 @@ public class QueryExecutor {
         return columns;
     }
 
-    private List<List<Object>> extractRows(ResultSet rs) throws SQLException {
+    public static List<List<Object>> extractRows(ResultSet rs, boolean[] truncated) throws SQLException {
         List<List<Object>> rows = new ArrayList<>();
         ResultSetMetaData meta = rs.getMetaData();
         int colCount = meta.getColumnCount();
         while (rs.next()) {
+            if (rows.size() >= ROW_LIMIT) {
+                truncated[0] = true;
+                break;
+            }
             List<Object> row = new ArrayList<>();
             for (int i = 1; i <= colCount; i++) {
                 row.add(rs.getObject(i));

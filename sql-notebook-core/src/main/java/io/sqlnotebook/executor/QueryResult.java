@@ -12,6 +12,7 @@ import java.util.List;
  * @param executionTimeMs Time taken in milliseconds.
  * @param success         True if the query ran without exceptions.
  * @param errorMessage    The exception message if success is false.
+ * @param truncated       True if the result was capped at the row limit.
  */
 public record QueryResult(
         String namespace,
@@ -20,22 +21,17 @@ public record QueryResult(
         List<List<Object>> rows,
         long executionTimeMs,
         boolean success,
-        String errorMessage
+        String errorMessage,
+        boolean truncated
 ) {
-    /**
-     * Factory method to create a successful result.
-     */
     public static QueryResult success(String namespace, String sql,
                                       List<String> columns, List<List<Object>> rows,
-                                      long executionTimeMs) {
-        return new QueryResult(namespace, sql, columns, rows, executionTimeMs, true, null);
+                                      long executionTimeMs, boolean truncated) {
+        return new QueryResult(namespace, sql, columns, rows, executionTimeMs, true, null, truncated);
     }
 
-    /**
-     * Factory method to create a failure result.
-     */
     public static QueryResult failure(String namespace, String sql,
                                       long executionTimeMs, String errorMessage) {
-        return new QueryResult(namespace, sql, List.of(), List.of(), executionTimeMs, false, errorMessage);
+        return new QueryResult(namespace, sql, List.of(), List.of(), executionTimeMs, false, errorMessage, false);
     }
 }

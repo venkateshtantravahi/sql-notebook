@@ -46,7 +46,7 @@ class HttpServerTest {
         FileSourceRegistry sourceRegistry = new FileSourceRegistry(registrar);
         executor = new QueryExecutor(registry);
         PinnedViewRegistry pinnedRegistry = new PinnedViewRegistry(registry, tempDir.resolve("pinned").toString());
-        server   = new HttpServer(PORT, registry, executor, sourceRegistry, registrar, pinnedRegistry);
+        server   = new HttpServer(PORT, registry, executor, sourceRegistry, registrar, pinnedRegistry, 0);
         server.start();
         client = HttpClient.newHttpClient();
 
