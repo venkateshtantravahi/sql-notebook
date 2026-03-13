@@ -3,6 +3,7 @@ package io.sqlnotebook.server;
 import io.sqlnotebook.connection.ConnectionRegistry;
 import io.sqlnotebook.duckdb.DuckDbRegistrar;
 import io.sqlnotebook.duckdb.FileSourceRegistry;
+import io.sqlnotebook.duckdb.PinnedViewRegistry;
 import io.sqlnotebook.executor.QueryExecutor;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
@@ -78,7 +79,8 @@ class FileSourceIntegrationTest {
                 uploadsDir.toString(), duckdbDir.toString());
         sourceRegistry = new FileSourceRegistry(registrar, sourcesJson);
         executor = new QueryExecutor(registry);
-        server = new HttpServer(PORT, registry, executor, sourceRegistry, registrar);
+        PinnedViewRegistry pinnedRegistry = new PinnedViewRegistry(registry, sharedTemp.resolve("pinned").toString());
+        server = new HttpServer(PORT, registry, executor, sourceRegistry, registrar, pinnedRegistry);
         server.start();
         client = HttpClient.newHttpClient();
     }

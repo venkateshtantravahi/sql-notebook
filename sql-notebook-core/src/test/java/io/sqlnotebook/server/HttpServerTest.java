@@ -4,10 +4,12 @@ import io.sqlnotebook.config.ConnectionConfig;
 import io.sqlnotebook.connection.ConnectionRegistry;
 import io.sqlnotebook.duckdb.DuckDbRegistrar;
 import io.sqlnotebook.duckdb.FileSourceRegistry;
+import io.sqlnotebook.duckdb.PinnedViewRegistry;
 import io.sqlnotebook.executor.QueryExecutor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -16,6 +18,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Path;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -25,6 +28,9 @@ class HttpServerTest {
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:13");
+
+    @TempDir
+    Path tempDir;
 
     private ConnectionRegistry registry;
     private QueryExecutor executor;
@@ -39,7 +45,8 @@ class HttpServerTest {
         DuckDbRegistrar registrar = new DuckDbRegistrar(registry);
         FileSourceRegistry sourceRegistry = new FileSourceRegistry(registrar);
         executor = new QueryExecutor(registry);
-        server   = new HttpServer(PORT, registry, executor,  sourceRegistry, registrar);
+        PinnedViewRegistry pinnedRegistry = new PinnedViewRegistry(registry, tempDir.resolve("pinned").toString());
+        server   = new HttpServer(PORT, registry, executor, sourceRegistry, registrar, pinnedRegistry);
         server.start();
         client = HttpClient.newHttpClient();
 
