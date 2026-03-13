@@ -6,6 +6,7 @@ import io.sqlnotebook.duckdb.FileSourceRegistry;
 import io.sqlnotebook.duckdb.PinnedViewRegistry;
 import io.sqlnotebook.executor.QueryExecutor;
 import io.sqlnotebook.federation.FederatedQueryExecutor;
+import io.sqlnotebook.server.HealthHandler;
 import org.eclipse.jetty.ee10.websocket.jakarta.server.config.JakartaWebSocketServletContainerInitializer;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
@@ -20,6 +21,7 @@ import org.eclipse.jetty.server.ServerConnector;
  * reachable from this machine.
  *
  * Routes:
+ *   GET    /health              — readiness probe (200 when pools are warm)
  *   GET    /namespaces          — list active namespaces
  *   POST   /query               — one-shot SQL query
  *   GET    /schema/*            — schema introspection
@@ -52,7 +54,7 @@ public class HttpServer {
      */
     public HttpServer(int port, ConnectionRegistry registry, QueryExecutor executor,
                       FileSourceRegistry sourceRegistry, DuckDbRegistrar registrar,
-                      PinnedViewRegistry pinnedRegistry) {
+                      PinnedViewRegistry pinnedRegistry, int readyPoolCount) {
         server = new Server();
         ServerConnector connector = new ServerConnector(server);
         connector.setHost("127.0.0.1");
@@ -64,6 +66,7 @@ public class HttpServer {
         ServletContextHandler context = new ServletContextHandler();
         context.setContextPath("/");
 
+        context.addServlet(new ServletHolder(new HealthHandler(readyPoolCount)), "/health");
         context.addServlet(new ServletHolder(new NamespaceHandler(registry)), "/namespaces");
         context.addServlet(new ServletHolder(new QueryHandler(executor)),     "/query");
         context.addServlet(new ServletHolder(new SchemaHandler(registry)),    "/schema/*");

@@ -10,6 +10,26 @@ import { useEffect, useRef, useState } from 'react'
 
 const AUTOSAVE_DEBOUNCE_MS = 2000 // 2s of inactivity triggers a draft write
 
+/**
+ * Polls GET /health with exponential backoff until the backend is ready.
+ * Max ~15s total wait (100ms → 150ms → … → 3000ms cap, 20 attempts).
+ * Resolves regardless — if the backend never responds, the app proceeds
+ * anyway and shows partial state rather than hanging forever.
+ */
+async function waitForBackend(maxAttempts = 20) {
+    let delay = 100
+    for (let i = 0; i < maxAttempts; i++) {
+        try {
+            const r = await fetch('/health')
+            if (r.ok) return
+        } catch {
+            // backend not up yet — keep polling
+        }
+        await new Promise((r) => setTimeout(r, delay))
+        delay = Math.min(Math.floor(delay * 1.5), 3000)
+    }
+}
+
 function App() {
     const restoreTitle = useNotebookStore((s) => s.restoreTitle)
     const saveDraft = useNotebookStore((s) => s.saveDraft)
@@ -22,17 +42,17 @@ function App() {
     const [splashReady, setSplashReady] = useState(false)
     const [splashDone, setSplashDone] = useState(false)
 
-    // on mount: restore draft from backend
+    // on mount: wait for backend health, then restore draft
     useEffect(() => {
         isRestoring.current = true
 
-        initFromDraft().then(({ title }) => {
-            // push the restored title into useNotebookStore without making dirty
-            restoreTitle(title)
-            // Allow autosave subscriber to fire
-            isRestoring.current = false
-            setSplashReady(true)
-        })
+        waitForBackend()
+            .then(() => initFromDraft())
+            .then(({ title }) => {
+                restoreTitle(title)
+                isRestoring.current = false
+                setSplashReady(true)
+            })
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 

@@ -68,9 +68,16 @@ public class App {
         PinnedViewRegistry pinnedRegistry = new PinnedViewRegistry(registry);
         log.info("[startup] pinned view registry ready ({} pinned dataset(s))", pinnedRegistry.listPinned().size());
 
-        // Step 5 — Http server
+        // Step 5 — Warm up all pools (validates connections, marks unhealthy ones)
+        Map<String, String> warmUpResults = registry.warmUp();
+        long healthy   = warmUpResults.values().stream().filter(String::isEmpty).count();
+        long unhealthy = warmUpResults.size() - healthy;
+        log.info("[startup] pool warm-up complete — {}/{} healthy", healthy, warmUpResults.size());
+        if (unhealthy > 0) log.warn("[startup] {} pool(s) failed warm-up — check credentials/connectivity", unhealthy);
+
+        // Step 6 — Http server
         QueryExecutor executor = new QueryExecutor(registry);
-        HttpServer server = new HttpServer(port, registry, executor, sourceRegistry, duckDbRegistrar, pinnedRegistry);
+        HttpServer server = new HttpServer(port, registry, executor, sourceRegistry, duckDbRegistrar, pinnedRegistry, (int) healthy);
         server.start();
         log.info("[startup] server listening on http://127.0.0.1:{}", server.getPort());
 

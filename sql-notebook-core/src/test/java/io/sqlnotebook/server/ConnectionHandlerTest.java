@@ -51,7 +51,7 @@ class ConnectionHandlerTest {
         FileSourceRegistry sourceRegistry = new FileSourceRegistry(registrar);
         QueryExecutor executor = new QueryExecutor(registry);
         PinnedViewRegistry pinnedRegistry = new PinnedViewRegistry(registry, tempDir.resolve("pinned").toString());
-        server = new HttpServer(0, registry, executor, sourceRegistry, registrar, pinnedRegistry);
+        server = new HttpServer(0, registry, executor, sourceRegistry, registrar, pinnedRegistry, 0);
         server.start();
         port   = server.getPort();
         http   = HttpClient.newHttpClient();

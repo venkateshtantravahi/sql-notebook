@@ -80,7 +80,7 @@ class FileSourceIntegrationTest {
         sourceRegistry = new FileSourceRegistry(registrar, sourcesJson);
         executor = new QueryExecutor(registry);
         PinnedViewRegistry pinnedRegistry = new PinnedViewRegistry(registry, sharedTemp.resolve("pinned").toString());
-        server = new HttpServer(PORT, registry, executor, sourceRegistry, registrar, pinnedRegistry);
+        server = new HttpServer(PORT, registry, executor, sourceRegistry, registrar, pinnedRegistry, 0);
         server.start();
         client = HttpClient.newHttpClient();
     }
