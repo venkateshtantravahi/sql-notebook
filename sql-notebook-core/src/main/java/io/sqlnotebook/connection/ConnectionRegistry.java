@@ -94,9 +94,7 @@ public class ConnectionRegistry {
         }
     }
 
-    // -------------------------------------------------------------------------
     // Registration
-    // -------------------------------------------------------------------------
 
     public void register(ConnectionConfig config) {
         if (pools.containsKey(config.namespace())) {
@@ -131,9 +129,7 @@ public class ConnectionRegistry {
         pool.close();
     }
 
-    // -------------------------------------------------------------------------
     // Access
-    // -------------------------------------------------------------------------
 
     public Connection getConnection(String namespace) {
         HikariDataSource pool = pools.get(namespace);
@@ -179,9 +175,7 @@ public class ConnectionRegistry {
         unhealthyNamespaces.clear();
     }
 
-    // -------------------------------------------------------------------------
     // Pool builders
-    // -------------------------------------------------------------------------
 
     private HikariDataSource buildPool(ConnectionConfig config) {
         return new HikariDataSource(buildHikariConfig(config));

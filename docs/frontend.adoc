@@ -73,6 +73,7 @@ frontend/
       sidebar/
         SchemaExplorer.jsx    ← Collapsible table/column tree per namespace
         SchemaErd.jsx         ← FK relationship lines between tables
+        DataProfiler.jsx      ← Namespace/table dropdowns + per-column stat cards (null bar, distinct, min/max/mean)
       common/
         FormField.jsx         ← Shared Field + Input components for modal forms
         StatusMessage.jsx     ← Themed success/error/pending banner
@@ -159,17 +160,19 @@ Controls the sidebar icon rail and resizable panel.
 [source,js]
 ----
 {
-  activePanel: 'connections' | 'schema' | 'datasources' | null,
+  activePanel: 'connections' | 'schema' | 'datasources' | 'profiler' | null,
   panelWidth: number,       // px width of the expandable panel (default 288)
   railWidth: number,        // fixed px width of the icon rail (40)
   namespaces: NamespaceHealth[],  // [{ name, healthy, latencyMs }]
   selectedNs: string | null,
+  backendReady: boolean,    // true after health check + settle delay; gates sidebar polling
   isOpen: boolean,          // derived — true when activePanel !== null
   setPanel(id),
   togglePanel(id),
   toggle(),                 // ⌘B — closes if open, opens connections panel otherwise
   setNamespaces(list),
   setSelectedNs(ns),
+  setBackendReady(v),
 }
 ----
 
@@ -209,7 +212,8 @@ App
  │    └── panel content
  │         ├── connections panel  ← namespace health list
  │         ├── schema panel       ← SchemaExplorer + SchemaErd
- │         └── datasources panel  ← file/remote source list
+ │         ├── datasources panel  ← file/remote source list
+ │         └── profiler panel     ← DataProfiler (namespace + table select, column stat cards)
  ├── MainArea
  │    ├── SplashScreen (while draft loads)
  │    ├── SqlCell[]
@@ -271,7 +275,7 @@ The hook reconnects with exponential backoff (1 s, 2 s, 4 s) on unexpected close
 | Fetches `GET /namespaces` then `GET /schema/:ns` for each. Re-fetches on `namespace-added` window event. Returns `{ schema, loading, error, refresh }`.
 
 | `useNamespaceRefresh()`
-| Polls `/namespaces` and writes the result into `useSidebarStore.namespaces`. Listens for `namespace-added` to refresh immediately on change.
+| Polls `/namespaces` and writes the result into `useSidebarStore.namespaces`. Listens for `namespace-added` to refresh immediately on change. Polling is gated on `useSidebarStore.backendReady` to prevent flooding the server before it has finished starting up.
 
 | `useFetchNamespaces()`
 | One-shot fetch of `/namespaces?all=true` (includes ephemeral DuckDB sources). Normalises the response to `string[]`. Used by `CellToolbar` to populate the namespace dropdown.
@@ -358,4 +362,4 @@ npm run lint
 npm run format
 ----
 
-The Vite dev server proxies all `/namespaces`, `/connections`, `/query`, `/ws`, `/sources`, `/schema`, `/draft`, `/browse`, and `/system` paths to `http://localhost:8080` so the backend can run separately during development.
+The Vite dev server proxies all `/namespaces`, `/connections`, `/query`, `/ws`, `/sources`, `/schema`, `/draft`, `/browse`, `/system`, `/health`, `/pin`, and `/profile` paths to `http://localhost:8080` so the backend can run separately during development.

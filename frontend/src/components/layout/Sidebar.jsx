@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import SchemaExplorer from '../sidebar/SchemaExplorer.jsx'
+import DataProfiler from '../sidebar/DataProfiler.jsx'
 import useSidebarStore from '../../store/useSidebarStore.js'
 import useConfigModalStore from '../../store/useConfigModalStore.js'
 import useFileSourceModalStore from '../../store/useFileSourceModalStore.js'
@@ -9,7 +10,15 @@ import { BsFiletypeJson, BsFiletypeXlsx, BsThreeDots } from 'react-icons/bs'
 import { IoGlobeOutline } from 'react-icons/io5'
 import { TbFileArrowRight, TbFileDatabase, TbFileTypeCsv } from 'react-icons/tb'
 import { FaRegFileAlt, FaRegFolderOpen } from 'react-icons/fa'
-import { LuFileJson, LuPlugZap, LuDatabase, LuPlus, LuPin, LuPinOff } from 'react-icons/lu'
+import {
+    LuFileJson,
+    LuPlugZap,
+    LuDatabase,
+    LuPlus,
+    LuPin,
+    LuPinOff,
+    LuChartBar,
+} from 'react-icons/lu'
 import { SiApacheparquet } from 'react-icons/si'
 
 const MIN_WIDTH = 180
@@ -194,6 +203,8 @@ function SchemaPanel({ pinnedNames }) {
                 </span>
                 {schemaNamespaces.length > 0 ? (
                     <select
+                        id="schema-namespace"
+                        name="schema-namespace"
                         value={selectedNs ?? ''}
                         onChange={(e) => setSelectedNs(e.target.value)}
                         className="
@@ -455,13 +466,21 @@ const RAIL_ITEMS = [
     { id: 'schema', icon: <MdAccountTree size={18} />, label: 'Schema Explorer' },
     { id: 'datasources', icon: <LuDatabase size={18} />, label: 'Data Sources' },
     { id: 'pinned', icon: <LuPin size={18} />, label: 'Pinned Datasets' },
+    { id: 'profiler', icon: <LuChartBar size={18} />, label: 'Data Profiler' },
 ]
 
 // Main Sidebar
 
 function Sidebar() {
-    const { activePanel, togglePanel, panelWidth, setPanelWidth, setNamespaces, setSelectedNs } =
-        useSidebarStore()
+    const {
+        activePanel,
+        togglePanel,
+        panelWidth,
+        setPanelWidth,
+        setNamespaces,
+        setSelectedNs,
+        backendReady,
+    } = useSidebarStore()
 
     const configStore = useConfigModalStore()
     const openNewConnection = configStore.open ?? (() => {})
@@ -500,11 +519,14 @@ function Sidebar() {
         })
     }, [setNamespaces, setSelectedNs])
 
+    // Don't poll until the backend has passed its health check + settle delay.
+    // This prevents console flooding with network errors during startup.
     useEffect(() => {
+        if (!backendReady) return
         fetchNs()
         const interval = setInterval(fetchNs, 30000)
         return () => clearInterval(interval)
-    }, [fetchNs])
+    }, [backendReady, fetchNs])
 
     useNamespaceRefresh(fetchNs)
 
@@ -638,6 +660,7 @@ function Sidebar() {
                         {activePanel === 'schema' && <SchemaPanel pinnedNames={pinnedNames} />}
                         {activePanel === 'datasources' && <DataSourcesPanel />}
                         {activePanel === 'pinned' && <PinnedPanel />}
+                        {activePanel === 'profiler' && <DataProfiler />}
                     </div>
                 )}
             </aside>

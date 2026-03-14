@@ -6,6 +6,7 @@ import ConfigModal from './components/modal/ConfigModal.jsx'
 import SplashScreen from './components/common/SplashScreen.jsx'
 import useNotebookStore from './store/useNotebookStore.js'
 import useCellStore from './store/useCellStore.js'
+import useSidebarStore from './store/useSidebarStore.js'
 import { useEffect, useRef, useState } from 'react'
 
 const AUTOSAVE_DEBOUNCE_MS = 2000 // 2s of inactivity triggers a draft write
@@ -30,6 +31,9 @@ async function waitForBackend(maxAttempts = 20) {
     }
 }
 
+/** Extra settle time after health passes — allows JDBC pools to finish warming. */
+const BACKEND_SETTLE_MS = 2000
+
 function App() {
     const restoreTitle = useNotebookStore((s) => s.restoreTitle)
     const saveDraft = useNotebookStore((s) => s.saveDraft)
@@ -42,12 +46,16 @@ function App() {
     const [splashReady, setSplashReady] = useState(false)
     const [splashDone, setSplashDone] = useState(false)
 
-    // on mount: wait for backend health, then restore draft
+    // on mount: wait for backend health, settle, then restore draft
     useEffect(() => {
         isRestoring.current = true
 
         waitForBackend()
-            .then(() => initFromDraft())
+            .then(() => new Promise((r) => setTimeout(r, BACKEND_SETTLE_MS)))
+            .then(() => {
+                useSidebarStore.getState().setBackendReady(true)
+                return initFromDraft()
+            })
             .then(({ title }) => {
                 restoreTitle(title)
                 isRestoring.current = false

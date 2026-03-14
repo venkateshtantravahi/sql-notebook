@@ -77,9 +77,7 @@ public class FederatedQueryExecutor {
         return found;
     }
 
-    /* ------------------------------------------------------------------ */
-    /* private                                                              */
-    /* ------------------------------------------------------------------ */
+    // private
 
     private QueryResult runFederated(String sql) {
         long start = System.currentTimeMillis();
