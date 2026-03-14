@@ -1,0 +1,217 @@
+= Data Profiler
+:toc: left
+:toclevels: 3
+:sectnums:
+:source-highlighter: rouge
+
+== Overview
+
+The Data Profiler computes per-column statistics for any registered namespace without requiring the user to write SQL. It surfaces row counts, null percentages, approximate distinct counts, and min/max (plus mean and standard deviation for DuckDB) in the sidebar panel.
+
+Two classes implement the feature:
+
+* `ProfilerService` — JDBC-level statistics engine; database-agnostic.
+* `ProfileHandler` — Jetty servlet that exposes the engine over HTTP, with an in-memory result cache.
+
+== Endpoints
+
+=== GET /profile/:namespace
+
+Auto-discovers the most relevant table and returns its column statistics.
+
+For DuckDB namespaces the `data` view is preferred (created by `DuckDbRegistrar` and `PinnedViewRegistry` as the canonical query target). If no `data` view exists, the first table alphabetically in the `main` schema is used.
+
+For other engines (MySQL, PostgreSQL, SQLite, etc.) the first `BASE TABLE` alphabetically from `INFORMATION_SCHEMA` (or `DatabaseMetaData.getTables()` for SQLite) is used.
+
+Returns `404` if the namespace has no tables.
+
+=== GET /profile/:namespace/:table
+
+Profiles the named table explicitly.
+
+=== Query Parameters
+
+[cols="1,3"]
+|===
+| Parameter | Effect
+
+| `refresh=true`
+| Bypasses the result cache and forces a full re-computation.
+|===
+
+=== Response Shape
+
+[source,json]
+----
+{
+  "namespace": "imdb",
+  "table":     "title_basics",
+  "columns": [
+    {
+      "name":          "tconst",
+      "type":          "VARCHAR",
+      "rowCount":      9500000,
+      "nullCount":     0,
+      "nullPct":       0.0,
+      "approxDistinct": 9500000,
+      "min":           "tt0000001",
+      "max":           "tt9999999",
+      "mean":          "",
+      "std":           ""
+    },
+    {
+      "name":          "runtimeMinutes",
+      "type":          "DOUBLE",
+      "rowCount":      9500000,
+      "nullCount":     3100000,
+      "nullPct":       32.63,
+      "approxDistinct": 412,
+      "min":           "1",
+      "max":           "51420",
+      "mean":          "89.4",
+      "std":           "63.2"
+    }
+  ]
+}
+----
+
+`mean` and `std` are populated only for DuckDB sources (via native `SUMMARIZE`). They are empty strings for MySQL, PostgreSQL, SQLite, and other generic JDBC sources.
+
+=== Error Responses
+
+[cols="1,3"]
+|===
+| Status | Cause
+
+| `400`
+| No namespace in path
+
+| `404`
+| Unknown namespace, or namespace has no tables
+
+| `500`
+| JDBC error during profiling (e.g. table no longer exists)
+|===
+
+== ProfilerService
+
+`ProfilerService` has two execution paths, selected automatically based on the JDBC product name.
+
+=== DuckDB Path (native SUMMARIZE)
+
+When connected to a DuckDB database, `profile()` issues a single `SUMMARIZE SELECT * FROM "table"` command. DuckDB returns one row per column with `count`, `null_percentage`, `approx_unique`, `min`, `max`, and either `avg` or `mean` (renamed in DuckDB v1.1.0).
+
+The `resolveColumn(meta, "mean", "avg")` helper scans `ResultSetMetaData` at runtime so the code works with both old and new DuckDB versions without any version checks.
+
+`nullCount` is derived from `null_percentage` rather than `count` because in DuckDB `SUMMARIZE`, `count` holds the total row count (not the non-null count):
+
+[source,java]
+----
+double nullPct   = rs.getDouble("null_percentage");
+long   nullCount = Math.round(total * nullPct / 100.0);
+----
+
+=== Generic Path (MySQL, PostgreSQL, SQLite, …)
+
+A single wide aggregation query is built dynamically:
+
+[source,sql]
+----
+SELECT COUNT(*),
+       SUM(CASE WHEN col1 IS NULL THEN 1 ELSE 0 END), COUNT(DISTINCT col1), MIN(col1), MAX(col1),
+       SUM(CASE WHEN col2 IS NULL THEN 1 ELSE 0 END), COUNT(DISTINCT col2), MIN(col2), MAX(col2),
+       ...
+FROM <source>
+----
+
+Results are read positionally — no column names are looked up — so there are no cross-database naming differences to handle.
+
+Column names and types are discovered first via a zero-row query (`WHERE 1=0`), which is always fast.
+
+==== Identifier Quoting
+
+`DatabaseMetaData.getIdentifierQuoteString()` provides the correct quote character for the connected database at runtime:
+
+* MySQL → `` ` `` (backtick)
+* PostgreSQL, SQLite, DuckDB → `"` (double-quote)
+* SQL Server → `"` or `[` depending on ANSI mode
+
+This eliminates per-database `switch` statements and handles unusual configurations correctly.
+
+==== Sampling for Large Tables
+
+For tables larger than `SAMPLE_ROWS` (100,000), the aggregation runs over a bounded subquery instead of the full table:
+
+[source,sql]
+----
+-- MySQL, PostgreSQL, SQLite
+SELECT COUNT(*), ... FROM (SELECT * FROM "big_table" LIMIT 100000) AS __snb_s
+
+-- SQL Server
+SELECT COUNT(*), ... FROM (SELECT TOP 100000 * FROM "big_table") AS __snb_s
+----
+
+`rowCount` is always the **exact** full-table count (from a separate `COUNT(*)` on the full table). `nullCount` and `approxDistinct` are estimates derived from the sample.
+
+The `sampleSource()` helper selects the correct syntax based on `getDatabaseProductName()`.
+
+=== Table Discovery
+
+`discoverTable(conn)` is called by `ProfileHandler` when no table name is provided in the URL:
+
+[cols="2,4"]
+|===
+| Engine | Strategy
+
+| DuckDB
+| Prefers the `data` view in `main` schema; falls back to first table alphabetically.
+
+| SQLite
+| Uses `DatabaseMetaData.getTables()` (INFORMATION_SCHEMA not available in SQLite); returns first table alphabetically.
+
+| MySQL, PostgreSQL, SQL Server, Oracle
+| Queries `INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME LIMIT 1`.
+|===
+
+== ProfileHandler
+
+`ProfileHandler` exposes `ProfilerService` over HTTP and adds an in-memory result cache.
+
+=== Cache
+
+Results are stored in a `ConcurrentHashMap<String, List<ColumnProfile>>` keyed by `"namespace::table"`. The cache is checked on every request before a JDBC connection is borrowed.
+
+This is important for DuckDB, which has a pool size of 1. Without caching, two rapid requests (e.g. React StrictMode double-invocation) would queue on the single connection, and the second request could time out under HikariCP's 5 s connection timeout.
+
+The `evict(namespace)` method removes all entries prefixed `"namespace::"`. It is called by `HttpServer` when a namespace is deregistered, ensuring stale profiles are never served after a connection is removed.
+
+=== Fast Path
+
+When a table is explicit in the URL and not `refresh=true`, `ProfileHandler` checks the cache before acquiring a connection:
+
+[source,java]
+----
+if (tableParam != null && !tableParam.isBlank() && !refresh) {
+    List<ColumnProfile> cached = cache.get(namespace + "::" + tableParam);
+    if (cached != null) { writeResult(...); return; }
+}
+----
+
+The slow path (borrow connection → discover table → profile → cache) only runs on a cache miss or explicit refresh.
+
+== Federated Query Integration
+
+Pinned federated results are stored as DuckDB `.db` files and registered as regular namespaces. The profiler treats them identically to any other DuckDB namespace — `data` view is detected, `SUMMARIZE` runs on it, and the column stats reflect the pinned result set.
+
+== Testing
+
+`ProfilerServiceTest` uses direct JDBC connections (no HTTP server):
+
+* DuckDB in-process: `SUMMARIZE` output, `mean`/`std` population, `discoverTable` preference for `data` view.
+* SQLite in-memory: generic-path quoting, `discoverViaJdbcMetadata` alphabetical ordering.
+* MySQL (Testcontainers): backtick quoting validation, sampling path activation.
+* PostgreSQL (Testcontainers): double-quote quoting, null count accuracy.
+
+`ProfileHandlerTest` uses a real Jetty server on a random port:
+
+* Auto-discovery, explicit table, cache hit, `?refresh=true` bypass, 400/404 error shapes, full JSON response field validation.

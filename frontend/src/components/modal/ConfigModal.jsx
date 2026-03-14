@@ -263,6 +263,8 @@ function ConfigModal() {
                         <div className="grid grid-cols-2 gap-3">
                             <Field label="Namespace name *" error={errors.namespace}>
                                 <Input
+                                    id="conn-namespace"
+                                    name="conn-namespace"
                                     type="text"
                                     placeholder="prod_mysql"
                                     value={form.namespace}
@@ -271,6 +273,8 @@ function ConfigModal() {
                             </Field>
                             <Field label="Database type *">
                                 <select
+                                    id="conn-type"
+                                    name="conn-type"
                                     value={form.type}
                                     onChange={(e) => handleChange('type', e.target.value)}
                                     className="w-full px-3 py-2 rounded text-sm font-mono bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
@@ -289,6 +293,8 @@ function ConfigModal() {
                                 <div className="col-span-2">
                                     <Field label="Host *" error={errors.host}>
                                         <Input
+                                            id="conn-host"
+                                            name="conn-host"
                                             type="text"
                                             placeholder="localhost"
                                             value={form.host}
@@ -298,6 +304,8 @@ function ConfigModal() {
                                 </div>
                                 <Field label="Port *" error={errors.port}>
                                     <Input
+                                        id="conn-port"
+                                        name="conn-port"
                                         type="number"
                                         placeholder="3306"
                                         value={form.port}
@@ -314,6 +322,8 @@ function ConfigModal() {
                             {isSQLite ? (
                                 <div className="flex gap-2">
                                     <Input
+                                        id="conn-database"
+                                        name="conn-database"
                                         type="text"
                                         placeholder={
                                             homeDir
@@ -335,6 +345,8 @@ function ConfigModal() {
                                 </div>
                             ) : (
                                 <Input
+                                    id="conn-database"
+                                    name="conn-database"
                                     type="text"
                                     placeholder="mydb"
                                     value={form.database}
@@ -347,6 +359,8 @@ function ConfigModal() {
                             <div className="grid grid-cols-2 gap-3">
                                 <Field label="Username *" error={errors.username}>
                                     <Input
+                                        id="conn-username"
+                                        name="conn-username"
                                         type="text"
                                         placeholder="root"
                                         value={form.username}
@@ -357,6 +371,8 @@ function ConfigModal() {
                                     label={isEdit ? 'Password (leave blank to keep)' : 'Password'}
                                 >
                                     <Input
+                                        id="conn-password"
+                                        name="conn-password"
                                         type="password"
                                         placeholder="••••••••"
                                         value={form.password}

@@ -4,11 +4,12 @@ const RAIL_WIDTH = 40
 const DEFAULT_PANEL_WIDTH = 288
 
 const useSidebarStore = create((set, get) => ({
-    activePanel: 'connections', // 'connections' | 'schema' | 'datasources' | null
+    activePanel: 'connections', // 'connections' | 'schema' | 'datasources' | 'pinned' | 'profiler' | null
     panelWidth: DEFAULT_PANEL_WIDTH,
     railWidth: RAIL_WIDTH,
     namespaces: [],
     selectedNs: null,
+    backendReady: false,
 
     // derived
     get isOpen() {
@@ -33,6 +34,7 @@ const useSidebarStore = create((set, get) => ({
     setPanelWidth: (w) => set({ panelWidth: w }),
     setNamespaces: (list) => set({ namespaces: list }),
     setSelectedNs: (ns) => set({ selectedNs: ns }),
+    setBackendReady: (v) => set({ backendReady: v }),
 }))
 
 export default useSidebarStore

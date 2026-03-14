@@ -124,9 +124,7 @@ public class PinnedViewRegistry {
         return pinnedNamespaces.contains(namespace);
     }
 
-    // -------------------------------------------------------------------------
     // private
-    // -------------------------------------------------------------------------
 
     /**
      * Re-register any .db files found in the pinned directory on startup.

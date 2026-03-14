@@ -22,6 +22,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      '/health':      { target: 'http://localhost:8080', changeOrigin: true },
       '/namespaces':  { target: 'http://localhost:8080', changeOrigin: true },
       '/query':       { target: 'http://localhost:8080', changeOrigin: true },
       '/schema':      { target: 'http://localhost:8080', changeOrigin: true },
@@ -30,7 +31,8 @@ export default defineConfig({
       '/system':      { target: 'http://localhost:8080', changeOrigin: true },
       '/files':       { target: 'http://localhost:8080', changeOrigin: true },
       '/sources':     { target: 'http://localhost:8080', changeOrigin: true },
-        '/pin':      { target: 'http://localhost:8080', changeOrigin: true },
+      '/pin':         { target: 'http://localhost:8080', changeOrigin: true },
+      '/profile':     { target: 'http://localhost:8080', changeOrigin: true },
       '/ws': {
         target:      'ws://localhost:8080',
         ws:          true,

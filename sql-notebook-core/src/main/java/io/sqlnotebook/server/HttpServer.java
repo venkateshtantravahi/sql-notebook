@@ -38,6 +38,8 @@ import org.eclipse.jetty.server.ServerConnector;
  *   POST   /pin                 — materialise federated result as pinned dataset
  *   GET    /pin                 — list pinned datasets
  *   DELETE /pin/:namespace      — unpin and delete dataset
+ *   GET    /profile/:ns         — auto-discover table and return column profiles
+ *   GET    /profile/:ns/:table  — profile named table and return column stats
  *   WS     /ws                  — query WebSocket
  */
 public class HttpServer {
@@ -75,6 +77,7 @@ public class HttpServer {
         context.addServlet(new ServletHolder(new FileBrowserHandler()),         "/files/*");
         context.addServlet(new ServletHolder(new FileSourceHandler(sourceRegistry, registrar)), "/sources/*");
         context.addServlet(new ServletHolder(new PinHandler(pinnedRegistry)), "/pin/*");
+        context.addServlet(new ServletHolder(new ProfileHandler(registry)),  "/profile/*");
         ServletHolder connectionHolder = new ServletHolder(new ConnectionHandler(registry));
         context.addServlet(connectionHolder, "/connections/*");
 

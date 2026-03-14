@@ -26,6 +26,10 @@ Default port is `8080`. On successful startup the application opens the browser 
 |===
 | Path | Handler | Description
 
+| `/health`
+| `HealthHandler`
+| Readiness probe — returns 200 once all pools have warmed up
+
 | `/namespaces`
 | `NamespaceHandler`
 | Ping all namespaces and return health status
@@ -40,7 +44,7 @@ Default port is `8080`. On successful startup the application opens the browser 
 
 | `/ws/query`
 | `QueryWebsocket`
-| Asynchronous SQL execution over WebSocket
+| Asynchronous SQL execution over WebSocket (federated queries supported)
 
 | `/schema/*`
 | `SchemaHandler`
@@ -50,6 +54,10 @@ Default port is `8080`. On successful startup the application opens the browser 
 | `FileSourceHandler`
 | Upload files, register remote URLs, list and delete sources
 
+| `/pin`
+| `PinHandler`
+| Materialise federated results as pinned DuckDB datasets; list and delete pins
+
 | `/draft`
 | `DraftHandler`
 | Notebook draft persistence (save/load)
@@ -57,9 +65,41 @@ Default port is `8080`. On successful startup the application opens the browser 
 | `/browse`
 | `FileBrowserHandler`
 | Local filesystem browser for SQLite/DuckDB file selection
+
+| `/system/info`
+| `SystemInfoHandler`
+| Returns server home directory and path separator for the file picker
+
+| `/profile/*`
+| `ProfileHandler`
+| Per-column statistics for any registered namespace and table
 |===
 
 == Endpoints
+
+=== GET /health
+
+Readiness probe. Returns `200 OK` once all connection pools have completed warm-up (`ConnectionRegistry.warmUp()`). Returns `503 Service Unavailable` until the configured number of ready pools is reached.
+
+The frontend polls this endpoint on startup before enabling the sidebar and query execution.
+
+[source,json]
+----
+{ "status": "ok", "readyPools": 3 }
+----
+
+'''
+
+=== GET /system/info
+
+Returns server-side filesystem metadata used by the SQLite file picker in the frontend.
+
+[source,json]
+----
+{ "homeDir": "/Users/alice", "separator": "/" }
+----
+
+'''
 
 === GET /namespaces
 
@@ -286,6 +326,67 @@ Requires a `version` field in the JSON body. Returns `{ "saved": true, "savedAt"
 Returns directory listings for local filesystem navigation. Used by the frontend file picker when adding a local SQLite or DuckDB file.
 
 Restricted to safe roots (home directory, `/tmp`, common data directories). Path traversal is blocked — requests for paths outside the allowed roots return `403`.
+
+'''
+
+=== POST /pin
+
+Materialise a federated query result as a persistent DuckDB dataset. The result is written to `~/.sqlnotebook/pinned/<namespace>.db` and registered as a queryable namespace.
+
+==== Request
+
+[source,json]
+----
+{
+  "name":    "user_orders_2026",
+  "columns": ["user_id", "order_total", "region"],
+  "rows":    [[1, 99.99, "North"], [2, 45.0, "South"]]
+}
+----
+
+==== Response
+
+[source,json]
+----
+{ "namespace": "pinned_user_orders_2026" }
+----
+
+The namespace is prefixed with `pinned_` and sanitised to contain only lowercase letters, digits, and underscores. If a name conflict exists, a numeric suffix is appended (`pinned_user_orders_2026_2`).
+
+'''
+
+=== GET /pin
+
+Returns all currently active pinned dataset namespaces.
+
+[source,json]
+----
+{ "pinned": ["pinned_user_orders_2026", "pinned_cross_join_result"] }
+----
+
+'''
+
+=== DELETE /pin/:namespace
+
+Deregisters the pinned namespace and deletes the `.db` file from disk.
+
+Returns `404` if the namespace is not a pinned dataset. Returns `400` if the namespace string is missing.
+
+'''
+
+=== GET /profile/:namespace
+
+Auto-discovers the first relevant table and returns per-column statistics. For DuckDB namespaces the `data` view is preferred; for others the first table alphabetically is used.
+
+See `profiler.adoc` for the full response shape and per-database behaviour.
+
+'''
+
+=== GET /profile/:namespace/:table
+
+Profiles a specific named table. Results are cached in memory; pass `?refresh=true` to force recomputation.
+
+Returns `404` for unknown namespaces and for namespaces with no tables.
 
 == Error Response Format
 

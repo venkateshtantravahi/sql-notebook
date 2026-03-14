@@ -25,21 +25,28 @@ sql.properties  /  sources.json
  ConnectionRegistry     creates one HikariCP pool per namespace; handles hot-add/remove
       │            ▲
       │            │  DuckDbRegistrar ─── FileSourceRegistry ─── FileSourceHandler
-      │            │  (file/remote sources register ephemeral namespaces at runtime)
+      │            │  PinnedViewRegistry (materialises federated results as DuckDB namespaces)
+      │            │  (file/remote/pinned sources register ephemeral namespaces at runtime)
       ▼
  QueryExecutor          submits SQL to a thread pool using connections from the registry
+      │
+      │  FederatedQueryExecutor   cross-namespace SQL via DuckDB ATTACH (fast) or Calcite (slow)
       │
       ▼
  HttpServer (Jetty)     exposes all modules over HTTP and WebSocket
       │
+      ├── GET  /health              → HealthHandler        → pool warm-up readiness
       ├── GET  /namespaces          → NamespaceHandler     → registry.getNamespaces()
       ├── ANY  /connections/*       → ConnectionHandler    → registry + ConfigParser
       ├── POST /query               → QueryHandler         → QueryExecutor.execute()
-      ├── WS   /ws/query            → QueryWebsocket       → QueryExecutor.execute()
+      ├── WS   /ws/query            → QueryWebsocket       → QueryExecutor + FederatedQueryExecutor
       ├── GET  /schema/*            → SchemaHandler        → registry.getConnection()
       ├── ANY  /sources/*           → FileSourceHandler    → FileSourceRegistry
+      ├── ANY  /pin/*               → PinHandler           → PinnedViewRegistry
       ├── ANY  /draft               → DraftHandler         → local filesystem
-      └── GET  /browse              → FileBrowserHandler   → local filesystem
+      ├── GET  /browse              → FileBrowserHandler   → local filesystem
+      ├── GET  /system/info         → SystemInfoHandler    → home dir + path separator
+      └── GET  /profile/*           → ProfileHandler       → ProfilerService (column stats)
 ----
 
 No module knows about the ones above it. `QueryExecutor` does not know about Jetty. `ConnectionRegistry` does not know about `QueryExecutor`. Each module depends only downward.
@@ -104,6 +111,21 @@ No module knows about the ones above it. `QueryExecutor` does not know about Jet
 | `FileBrowserHandler`
 | `GET /browse` — local filesystem navigation restricted to safe roots.
 
+| `FederatedQueryExecutor`
+| Executes cross-namespace SQL. Fast path: DuckDB ATTACH for local DuckDB files. Slow path: Apache Calcite in-memory join for mixed engine types.
+
+| `PinnedViewRegistry`
+| Materialises federated result sets as disk-backed DuckDB `.db` files and registers them as queryable namespaces. Rehydrates pinned datasets on startup.
+
+| `ProfilerService`
+| Computes per-column statistics (row count, null%, approx distinct, min, max, mean, std). DuckDB path uses native `SUMMARIZE`; generic path builds a single wide aggregation query with per-database identifier quoting and row sampling for large tables.
+
+| `ProfileHandler`
+| `GET /profile/:ns` and `GET /profile/:ns/:table`. Wraps `ProfilerService` with an in-memory result cache; provides cache invalidation via `evict(namespace)`.
+
+| `HealthHandler`
+| `GET /health` — returns readiness status once all connection pools have warmed up.
+
 | `FileUtils`
 | Shared utilities: file extension extraction, path traversal validation.
 
@@ -132,11 +154,14 @@ App.main()
   ├── new FileSourceRegistry(registrar)
   │     └── rehydrate() → re-registers all sources from sources.json
   │
+  ├── new PinnedViewRegistry(registry)
+  │     └── rehydrate() → re-registers all .db files from ~/.sqlnotebook/pinned/
+  │
   ├── new QueryExecutor(registry)
   │     └── creates fixed thread pool (max(4, namespaceCount × 3))
   │
-  ├── new HttpServer(registry, sourceRegistry, registrar, executor, 8080)
-  │     └── mounts all handlers
+  ├── new HttpServer(registry, sourceRegistry, registrar, pinnedRegistry, executor, 8080)
+  │     └── mounts all handlers (including ProfileHandler + PinHandler)
   │
   └── server.start()
         └── Desktop.browse("http://localhost:8080")
@@ -302,4 +327,7 @@ The reason virtual threads are used in `QueryWebsocket` is important: blocking a
 
 | link:draft.adoc[draft.adoc]
 | Notebook draft persistence, atomic write strategy, backup ring, corruption recovery
+
+| link:profiler.adoc[profiler.adoc]
+| Per-column statistics engine, DuckDB SUMMARIZE path, generic aggregation path, sampling, table discovery, cache behaviour
 |===
