@@ -94,7 +94,7 @@ class ProfileHandlerTest {
         PinnedViewRegistry pinnedRegistry = new PinnedViewRegistry(
                 registry, tempDir.resolve("pinned").toString());
 
-        server = new HttpServer(0, registry, executor, sourceRegistry, registrar, pinnedRegistry, 0);
+        server = new HttpServer(0, registry, executor, sourceRegistry, registrar, pinnedRegistry, 0, System.getProperty("user.dir"));
         server.start();
         port = server.getPort();
 
@@ -212,7 +212,7 @@ class ProfileHandlerTest {
         HttpResponse<String> first = get("/profile/duckdb_ns/events");
         assertEquals(200, first.statusCode());
 
-        // Second call should return identical data (served from cache — no connection borrowed)
+        // Second call should return identical data (served from cache  -  no connection borrowed)
         HttpResponse<String> second = get("/profile/duckdb_ns/events");
         assertEquals(200, second.statusCode());
 

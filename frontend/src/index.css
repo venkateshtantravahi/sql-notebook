@@ -18,7 +18,7 @@
 
   /*  Dark mode colour overrides
    *
-   * Tailwind's default gray scale is designed for light-mode — the darker
+   * Tailwind's default gray scale is designed for light-mode - the darker
    * shades like gray-400 (#9ca3af) and gray-500 (#6b7280) are too dim on
    * dark backgrounds and fail WCAG AA contrast.
    *
@@ -26,13 +26,13 @@
    * matters for readability. Light mode is completely untouched.
    *
    * Mapping:
-   *   --color-text-primary    → body text         (was gray-300 → now ~gray-100)
-   *   --color-text-secondary  → secondary labels  (was gray-400 → now ~gray-300)
-   *   --color-text-muted      → hints/placeholders (was gray-500 → now ~gray-400)
-   *   --color-text-faint      → disabled/very dim  (was gray-600/700 → now ~gray-500)
-   *   --color-border          → dividers           (unchanged gray-800)
-   *   --color-surface         → card/panel bg      (unchanged gray-900)
-   *   --color-surface-raised  → hover state        (unchanged gray-800)
+   *   --color-text-primary    -> body text         (was gray-300 -> now ~gray-100)
+   *   --color-text-secondary  -> secondary labels  (was gray-400 -> now ~gray-300)
+   *   --color-text-muted      -> hints/placeholders (was gray-500 -> now ~gray-400)
+   *   --color-text-faint      -> disabled/very dim  (was gray-600/700 -> now ~gray-500)
+   *   --color-border          -> dividers           (unchanged gray-800)
+   *   --color-surface         -> card/panel bg      (unchanged gray-900)
+   *   --color-surface-raised  -> hover state        (unchanged gray-800)
     */
 
   :root {
@@ -48,16 +48,16 @@
   }
 
   .dark {
-    /* Primary body text — near-white, no amber tint */
+    /* Primary body text - near-white, no amber tint */
     --color-text-primary:   #f1f5f9;   /* slate-100 */
 
-    /* Secondary text — labels, namespace names, column names */
+    /* Secondary text - labels, namespace names, column names */
     --color-text-secondary: #cbd5e1;   /* slate-300 */
 
-    /* Muted text — section headers, hints, placeholders */
+    /* Muted text - section headers, hints, placeholders */
     --color-text-muted:     #94a3b8;   /* slate-400 */
 
-    /* Faint text — version numbers, disabled states */
+    /* Faint text - version numbers, disabled states */
     --color-text-faint:     #64748b;   /* slate-500 */
 
     /* Borders */
@@ -67,14 +67,14 @@
     --color-surface:        #111827;   /* gray-900 */
     --color-surface-raised: #1f2937;   /* gray-800 */
 
-    /* Cards — lifted off shell so cells/modals are visible against the page */
+    /* Cards - lifted off shell so cells/modals are visible against the page */
     --color-card:           #161f2e;
     --color-card-toolbar:   #1a2540;
   }
 
-  /* Scrollbar — lighter thumb in dark mode */
+  /* Scrollbar - lighter thumb in dark mode */
   .dark ::-webkit-scrollbar-thumb {
-    background: #475569;   /* slate-600 — visible but not harsh */
+    background: #475569;   /* slate-600 - visible but not harsh */
   }
   .dark ::-webkit-scrollbar-track {
     background: transparent;
@@ -122,6 +122,32 @@
 .dark .markdown-preview pre { background: #1f2937; }
 .markdown-preview pre code { background: transparent; padding: 0; }
 .markdown-preview a { color: #3b82f6; text-decoration: underline; }
+
+/* GFM tables */
+.markdown-preview table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 0.75rem;
+    font-size: 0.875em;
+    display: block;
+    overflow-x: auto;
+}
+.markdown-preview th,
+.markdown-preview td {
+    border: 1px solid #e5e7eb;
+    padding: 0.35rem 0.75rem;
+    text-align: left;
+    white-space: nowrap;
+}
+.dark .markdown-preview th,
+.dark .markdown-preview td  { border-color: #374151; }
+.markdown-preview th {
+    background: #f9fafb;
+    font-weight: 600;
+}
+.dark .markdown-preview th  { background: #1e293b; }
+.markdown-preview tr:nth-child(even) td { background: #f9fafb; }
+.dark .markdown-preview tr:nth-child(even) td { background: rgba(255,255,255,0.03); }
 .markdown-preview blockquote {
     border-left: 3px solid #d1d5db;
     padding-left: 0.75rem;
@@ -139,23 +165,23 @@
 .markdown-preview > *:last-child  { margin-bottom: 0; }
 
 @layer utilities {
-  /* Primary text — gray-100 / gray-200 / gray-300 in dark */
+  /* Primary text - gray-100 / gray-200 / gray-300 in dark */
   .dark .dark\:text-gray-100 { color: var(--color-text-primary) !important; }
   .dark .dark\:text-gray-200 { color: var(--color-text-primary) !important; }
   .dark .dark\:text-gray-300 { color: var(--color-text-secondary) !important; }
 
-  /* Secondary text — gray-400 */
+  /* Secondary text - gray-400 */
   .dark .dark\:text-gray-400 { color: var(--color-text-muted) !important; }
 
-  /* Muted / faint — gray-500, gray-600 */
+  /* Muted / faint - gray-500, gray-600 */
   .dark .dark\:text-gray-500 { color: var(--color-text-faint) !important; }
   .dark .dark\:text-gray-600 { color: var(--color-text-faint) !important; }
 
-  /* Gray-700 used for near-invisible decorative elements — keep dim but visible */
+  /* Gray-700 used for near-invisible decorative elements - keep dim but visible */
   .dark .dark\:text-gray-700 { color: #475569 !important; }  /* slate-600 */
 
-  /*  Results table — row hover + separator visibility  */
+  /*  Results table - row hover + separator visibility  */
   .dark .dark\:hover\:bg-blue-900\/10:hover {
-    background-color: rgba(30, 64, 175, 0.18) !important;   /* was 0.10 — too faint */
+    background-color: rgba(30, 64, 175, 0.18) !important;   /* was 0.10 - too faint */
   }
 }

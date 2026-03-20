@@ -51,7 +51,7 @@ class ConnectionHandlerTest {
         FileSourceRegistry sourceRegistry = new FileSourceRegistry(registrar);
         QueryExecutor executor = new QueryExecutor(registry);
         PinnedViewRegistry pinnedRegistry = new PinnedViewRegistry(registry, tempDir.resolve("pinned").toString());
-        server = new HttpServer(0, registry, executor, sourceRegistry, registrar, pinnedRegistry, 0);
+        server = new HttpServer(0, registry, executor, sourceRegistry, registrar, pinnedRegistry, 0, System.getProperty("user.dir"));
         server.start();
         port   = server.getPort();
         http   = HttpClient.newHttpClient();
@@ -201,7 +201,7 @@ class ConnectionHandlerTest {
 
     @Test
     void delete_returns400WhenNamespaceMissing() throws Exception {
-        // DELETE /connections/  → pathInfo "/" → namespace "" → 400
+        // DELETE /connections/  -> pathInfo "/" -> namespace "" -> 400
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/connections/"))
                 .method("DELETE", HttpRequest.BodyPublishers.noBody())

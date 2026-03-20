@@ -22,21 +22,21 @@ import java.util.stream.Collectors;
  * Handles server-side draft persistence for the active notebook.
  * Mounted at /draft in HttpServer.
  *
- * GET  /draft  — read current draft from disk, returns 204 if none exists yet
- * POST /draft  — atomically write draft to disk, rotate backup ring
+ * GET  /draft   -  read current draft from disk, returns 204 if none exists yet
+ * POST /draft   -  atomically write draft to disk, rotate backup ring
  *
  * Storage layout:
- *   ~/.sqlnotebook/drafts/current.sqlnb      ← always the latest draft
- *   ~/.sqlnotebook/backups/current_<ts>.sqlnb ← backup ring, max 20 kept
+ *   ~/.sqlnotebook/drafts/current.sqlnb      <- always the latest draft
+ *   ~/.sqlnotebook/backups/current_<ts>.sqlnb <- backup ring, max 20 kept
  *
  * Atomic write strategy:
  *   1. Write to current.sqlnb.tmp
- *   2. Move (atomic rename) tmp → current.sqlnb
- *   Either the old version exists or the new one does — never a corrupt half-write.
+ *   2. Move (atomic rename) tmp -> current.sqlnb
+ *   Either the old version exists or the new one does  -  never a corrupt half-write.
  *
  * What is persisted:
  *   - Cell queries, namespace selection, cell order, notebook title
- *   - Result sets are deliberately excluded — they are stale on reload and
+ *   - Result sets are deliberately excluded  -  they are stale on reload and
  *     always reproducible by re-running the query.
  */
 public class DraftHandler extends HttpServlet {
@@ -44,7 +44,8 @@ public class DraftHandler extends HttpServlet {
     private static final String DRAFT_DIR = ".sqlnotebook/drafts";
     private static final String BACKUP_DIR = ".sqlnotebook/backups";
     private static final String DRAFT_FILE = "current.sqlnb";
-    private static final int MAX_BACKUPS = 20;
+    private static final int MAX_BACKUPS = 5;
+    private static final long BACKUP_INTERVAL_MS = 5 * 60 * 1000L;
 
     private static final DateTimeFormatter BACKUP_TS =
             DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss").withZone(ZoneOffset.UTC);
@@ -61,15 +62,14 @@ public class DraftHandler extends HttpServlet {
     }
 
     /**
-     * GET /draft — returns the current draft as JSON, or 404 if none exists yet.
+     * GET /draft  -  returns the current draft as JSON, or 404 if none exists yet.
      * If the draft file is corrupt (invalid JSON), falls back to the latest backup.
      * Returns 204 only when no draft and no backup are available.
      */
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         if (!Files.exists(draftPath)) {
-            // First launch — no draft yet, frontend starts a blank notebook
-            resp.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            serveFallback(resp);
             return;
         }
 
@@ -77,7 +77,7 @@ public class DraftHandler extends HttpServlet {
         try {
             raw = Files.readAllBytes(draftPath);
         } catch (IOException e) {
-            // I/O failure reading draft — try backup before giving up
+            // I/O failure reading draft  -  try backup before giving up
             serveFallback(resp);
             return;
         }
@@ -85,7 +85,7 @@ public class DraftHandler extends HttpServlet {
         try {
             mapper.readTree(raw); // validate JSON integrity
         } catch (Exception e) {
-            // Draft JSON is corrupt — serve most recent backup instead
+            // Draft JSON is corrupt  -  serve most recent backup instead
             serveFallback(resp);
             return;
         }
@@ -97,7 +97,7 @@ public class DraftHandler extends HttpServlet {
     }
 
     /**
-     * POST /draft — receives the full notebook JSON, writes it atomically, and rotates the backup ring.
+     * POST /draft  -  receives the full notebook JSON, writes it atomically, and rotates the backup ring.
      * Requires a {@code version} field in the payload for future format migration.
      */
     @Override
@@ -113,9 +113,9 @@ public class DraftHandler extends HttpServlet {
             return;
         }
 
-        // Require at minimum a version field so we can detect format changes later
-        if (!node.has("version")) {
-            sendError(resp, 400, "Missing required field: version");
+        // Require at minimum a version or format field so we can detect format changes later
+        if (!node.has("version") && !node.has("format")) {
+            sendError(resp, 400, "Missing required field: version or format");
             return;
         }
 
@@ -169,6 +169,7 @@ public class DraftHandler extends HttpServlet {
      */
     private void rotateBefore() throws IOException {
         if (!Files.exists(draftPath)) return;
+        if (!shouldCreateBackup()) return;
 
         String ts = BACKUP_TS.format(Instant.now());
         Path backupTarget = backupDir.resolve("current_" + ts + ".sqlnb");
@@ -177,7 +178,7 @@ public class DraftHandler extends HttpServlet {
 
     /**
      * Writes content to a .tmp file then atomically renames it to the real draft path.
-     * Guarantees the draft is always either the old or new version — never corrupt.
+     * Guarantees the draft is always either the old or new version  -  never corrupt.
      */
     private void atomicWrite(String content)  throws IOException {
         Path tmp = draftPath.resolveSibling(DRAFT_FILE + ".tmp");
@@ -224,6 +225,22 @@ public class DraftHandler extends HttpServlet {
             return backups.get(backups.size() - 1);
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    private boolean shouldCreateBackup() {
+        if (!Files.exists(backupDir)) return true;
+        try {
+            long mostRecent = 0L;
+            try (DirectoryStream<Path> ds = Files.newDirectoryStream(backupDir, "current_*.sqlnb")) {
+                for (Path p : ds) {
+                    long mod = Files.getLastModifiedTime(p).toMillis();
+                    if (mod > mostRecent) mostRecent = mod;
+                }
+            }
+            return mostRecent == 0L || (System.currentTimeMillis() - mostRecent) >= BACKUP_INTERVAL_MS;
+        } catch (IOException e) {
+            return true;
         }
     }
 

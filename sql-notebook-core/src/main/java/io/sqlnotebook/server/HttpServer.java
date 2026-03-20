@@ -17,30 +17,36 @@ import org.eclipse.jetty.server.ServerConnector;
  * Main HTTP server wrapper using Jetty.
  * Configures both traditional REST endpoints and modern WebSocket endpoints.
  *
- * Binds exclusively to 127.0.0.1 — never 0.0.0.0 — so the server is only
+ * Binds exclusively to 127.0.0.1  -  never 0.0.0.0  -  so the server is only
  * reachable from this machine.
  *
  * Routes:
- *   GET    /health              — readiness probe (200 when pools are warm)
- *   GET    /namespaces          — list active namespaces
- *   POST   /query               — one-shot SQL query
- *   GET    /schema/*            — schema introspection
- *   POST   /connections/add     — add persistent JDBC connection
- *   POST   /connections/test    — test connection without saving
- *   PUT    /connections/:ns     — edit existing connection
- *   DELETE /connections/:ns     — remove persistent connection
- *   GET    /draft               — load notebook draft
- *   POST   /draft               — save notebook draft
- *   POST   /sources/upload      — upload local file as DuckDB namespace
- *   POST   /sources/remote      — register HTTP/S3 URL as DuckDB namespace
- *   GET    /sources             — list all file/remote sources
- *   DELETE /sources/:namespace  — remove file/remote source
- *   POST   /pin                 — materialise federated result as pinned dataset
- *   GET    /pin                 — list pinned datasets
- *   DELETE /pin/:namespace      — unpin and delete dataset
- *   GET    /profile/:ns         — auto-discover table and return column profiles
- *   GET    /profile/:ns/:table  — profile named table and return column stats
- *   WS     /ws                  — query WebSocket
+ *   GET    /health               -  readiness probe (200 when pools are warm)
+ *   GET    /namespaces           -  list active namespaces
+ *   POST   /query                -  one-shot SQL query
+ *   GET    /schema/*             -  schema introspection
+ *   POST   /connections/add      -  add persistent JDBC connection
+ *   POST   /connections/test     -  test connection without saving
+ *   PUT    /connections/:ns      -  edit existing connection
+ *   DELETE /connections/:ns      -  remove persistent connection
+ *   GET    /draft                -  load notebook draft
+ *   POST   /draft                -  save notebook draft
+ *   POST   /sources/upload       -  upload local file as DuckDB namespace
+ *   POST   /sources/remote       -  register HTTP/S3 URL as DuckDB namespace
+ *   GET    /sources              -  list all file/remote sources
+ *   DELETE /sources/:namespace   -  remove file/remote source
+ *   POST   /pin                  -  materialise federated result as pinned dataset
+ *   GET    /pin                  -  list pinned datasets
+ *   DELETE /pin/:namespace       -  unpin and delete dataset
+ *   GET    /profile/:ns          -  auto-discover table and return column profiles
+ *   GET    /profile/:ns/:table   -  profile named table and return column stats
+ *   GET    /workspace            -  list workspace files
+ *   GET    /workspace/read       -  read a .sqlnb file
+ *   POST   /workspace            -  create a new blank .sqlnb file
+ *   POST   /workspace/save       -  save a workspace file
+ *   POST   /workspace/rename     -  rename a workspace file
+ *   DELETE /workspace            -  delete a workspace file
+ *   WS     /ws                   -  query WebSocket
  */
 public class HttpServer {
 
@@ -49,14 +55,16 @@ public class HttpServer {
     /**
      * Configures the server with routes and shared dependencies.
      *
-     * @param port     The port to listen on.
-     * @param registry The registry to provide to the NamespaceHandler.
-     * @param executor The executor to provide to the QueryHandler and WebSocket.
+     * @param port          The port to listen on.
+     * @param registry      The registry to provide to the NamespaceHandler.
+     * @param executor      The executor to provide to the QueryHandler and WebSocket.
      * @param sourceRegistry File/remote source registry for the data source feature.
+     * @param workspaceDir  The directory the app was launched from (CWD).
      */
     public HttpServer(int port, ConnectionRegistry registry, QueryExecutor executor,
                       FileSourceRegistry sourceRegistry, DuckDbRegistrar registrar,
-                      PinnedViewRegistry pinnedRegistry, int readyPoolCount) {
+                      PinnedViewRegistry pinnedRegistry, int readyPoolCount,
+                      String workspaceDir) {
         server = new Server();
         ServerConnector connector = new ServerConnector(server);
         connector.setHost("127.0.0.1");
@@ -78,6 +86,7 @@ public class HttpServer {
         context.addServlet(new ServletHolder(new FileSourceHandler(sourceRegistry, registrar)), "/sources/*");
         context.addServlet(new ServletHolder(new PinHandler(pinnedRegistry)), "/pin/*");
         context.addServlet(new ServletHolder(new ProfileHandler(registry)),  "/profile/*");
+        context.addServlet(new ServletHolder(new WorkspaceHandler(workspaceDir)), "/workspace/*");
         ServletHolder connectionHolder = new ServletHolder(new ConnectionHandler(registry));
         context.addServlet(connectionHolder, "/connections/*");
 

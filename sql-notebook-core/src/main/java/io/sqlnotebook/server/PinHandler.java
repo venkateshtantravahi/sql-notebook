@@ -18,15 +18,15 @@ import java.util.stream.Collectors;
  * HTTP handler for pinned dataset operations.
  * Mounted at /pin/* in HttpServer.
  *
- * POST   /pin        — materialise a federated result as a named DuckDB dataset
- * GET    /pin        — list all currently pinned namespace names
- * DELETE /pin/:ns    — unpin (deregister + delete .db file)
+ * POST   /pin         -  materialise a federated result as a named DuckDB dataset
+ * GET    /pin         -  list all currently pinned namespace names
+ * DELETE /pin/:ns     -  unpin (deregister + delete .db file)
  *
  * POST /pin request body:
  * {
  *   "name":    "user_orders",           // user-chosen label (will be sanitised)
  *   "columns": ["user_id", "total"],    // column names from the federated result
- *   "rows":    [[1, 342.5], [2, 178.0]] // data rows — numbers, strings, booleans, nulls
+ *   "rows":    [[1, 342.5], [2, 178.0]] // data rows  -  numbers, strings, booleans, nulls
  * }
  *
  * POST /pin response:
@@ -41,7 +41,7 @@ public class PinHandler extends HttpServlet {
         this.pinnedRegistry = pinnedRegistry;
     }
 
-    /** GET /pin — returns { "pinned": ["pinned_a", "pinned_b", ...] } */
+    /** GET /pin  -  returns { "pinned": ["pinned_a", "pinned_b", ...] } */
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         ArrayNode arr = mapper.createArrayNode();
@@ -53,7 +53,7 @@ public class PinHandler extends HttpServlet {
         json(resp, 200, body);
     }
 
-    /** POST /pin — materialise and register a new pinned dataset. */
+    /** POST /pin  -  materialise and register a new pinned dataset. */
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String raw;
@@ -117,7 +117,7 @@ public class PinHandler extends HttpServlet {
     }
 
     /**
-     * DELETE /pin/:namespace — unpin the dataset.
+     * DELETE /pin/:namespace  -  unpin the dataset.
      * The namespace name is the path segment after /pin/.
      */
     @Override

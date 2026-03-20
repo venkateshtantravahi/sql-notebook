@@ -3,14 +3,14 @@ import { useEffect, useRef } from 'react'
 
 // Detect modifier key based on OS
 const isMac = (() => {
-    // Modern API — Chromium browsers (Chrome, Edge, Brave, Opera)
+    // Modern API  -  Chromium browsers (Chrome, Edge, Brave, Opera)
     if (navigator.userAgentData?.platform) {
         return ['macOS', 'iOS'].includes(navigator.userAgentData.platform)
     }
-    // Fallback — Safari, Firefox (userAgent still works, not yet removed)
+    // Fallback  -  Safari, Firefox (userAgent still works, not yet removed)
     return /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)
 })()
-const mod = isMac ? '⌘' : 'Ctrl'
+const mod = isMac ? 'Cmd' : 'Ctrl'
 
 const SECTIONS = [
     {
@@ -19,14 +19,15 @@ const SECTIONS = [
             { keys: `${mod} N`, action: 'New notebook' },
             { keys: `${mod} O`, action: 'Open notebook' },
             { keys: `${mod} S`, action: 'Save notebook' },
-            { keys: `${mod} ⇧ S`, action: 'Save notebook as' },
+            { keys: `${mod} Shift S`, action: 'Save notebook as' },
+            { keys: `${mod} W`, action: 'Close notebook' },
         ],
     },
     {
         title: 'Cell',
         shortcuts: [
-            { keys: `${mod} ↵`, action: 'Run cell' },
-            { keys: `${mod} ⇧ ↵`, action: 'Run all cells' },
+            { keys: `${mod} Enter`, action: 'Run cell' },
+            { keys: `${mod} Shift Enter`, action: 'Run all cells' },
             { keys: `${mod} D`, action: 'Delete cell' },
         ],
     },
@@ -35,9 +36,9 @@ const SECTIONS = [
         shortcuts: [
             { keys: `${mod} B`, action: 'Toggle sidebar' },
             { keys: `${mod} +`, action: 'Zoom in' },
-            { keys: `${mod} −`, action: 'Zoom out' },
+            { keys: `${mod} -`, action: 'Zoom out' },
             { keys: `${mod} 0`, action: 'Reset zoom' },
-            { keys: `${mod} ⇧ T`, action: 'Toggle theme' },
+            { keys: `${mod} Shift T`, action: 'Toggle theme' },
         ],
     },
     {

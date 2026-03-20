@@ -23,10 +23,10 @@ import java.util.stream.Collectors;
  * Handles the connection management lifecycle.
  * Mounted at /connections/* in HttpServer.
  *
- * POST   /connections/add    — write sql.properties + hot-load into registry
- * POST   /connections/test   — test JDBC connection without writing to disk
- * PUT    /connections/:ns    — update existing connection (remove old + re-register new)
- * DELETE /connections/:ns    — remove from sql.properties + deregister from registry
+ * POST   /connections/add     -  write sql.properties + hot-load into registry
+ * POST   /connections/test    -  test JDBC connection without writing to disk
+ * PUT    /connections/:ns     -  update existing connection (remove old + re-register new)
+ * DELETE /connections/:ns     -  remove from sql.properties + deregister from registry
  */
 public class ConnectionHandler extends HttpServlet {
 
@@ -47,7 +47,7 @@ public class ConnectionHandler extends HttpServlet {
         this.mapper       = new ObjectMapper();
     }
 
-    // GET /connections/:namespace — return config without password (for edit pre-fill)
+    // GET /connections/:namespace  -  return config without password (for edit pre-fill)
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
@@ -59,7 +59,7 @@ public class ConnectionHandler extends HttpServlet {
             return;
         }
 
-        // Read directly from sql.properties — registry only stores pools, not configs
+        // Read directly from sql.properties  -  registry only stores pools, not configs
         Map<String, ConnectionConfig> all;
         try {
             all = configParser.parse(PROPERTIES_FILE);
@@ -74,7 +74,7 @@ public class ConnectionHandler extends HttpServlet {
             return;
         }
 
-        // Return full config — password intentionally omitted to avoid credential leaking
+        // Return full config  -  password intentionally omitted to avoid credential leaking
         ObjectNode body = mapper.createObjectNode();
         body.put("namespace", config.namespace());
         body.put("type",      config.type());
@@ -297,15 +297,15 @@ public class ConnectionHandler extends HttpServlet {
     private String friendlyError(String raw) {
         if (raw == null) return "Connection failed";
         if (raw.contains("Connection refused") || raw.contains("connect to host"))
-            return "Connection refused — check host and port";
+            return "Connection refused  -  check host and port";
         if (raw.contains("Access denied") || raw.contains("password"))
-            return "Authentication failed — check username and password";
+            return "Authentication failed  -  check username and password";
         if (raw.contains("Unknown database") || raw.contains("does not exist"))
-            return "Database not found — check database name";
+            return "Database not found  -  check database name";
         if (raw.contains("SSL") || raw.contains("ssl"))
-            return "SSL required — check your database SSL settings";
+            return "SSL required  -  check your database SSL settings";
         if (raw.contains("timeout") || raw.contains("timed out"))
-            return "Connection timed out — check host and firewall rules";
+            return "Connection timed out  -  check host and firewall rules";
         int dot = raw.indexOf('.');
         return dot > 0 ? raw.substring(0, dot) : raw;
     }

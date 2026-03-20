@@ -1,11 +1,12 @@
 import { useEffect, useRef, useCallback } from 'react'
 import useCellStore from '../store/useCellStore.js'
+import { useBackendReady } from './useBackendReady.js'
 
-// useQuerySocket — manages a singleton WebSocket to the backend query endpoint.
+// useQuerySocket - manages a singleton WebSocket to the backend query endpoint.
 // Returns runQuery(cellId, namespace, query).
 // Reconnects with exponential backoff on unexpected close (max 3 attempts).
 // In-flight queries surface an error immediately if the socket dies.
-// Protocol — send: { cellId, namespace, query }
+// Protocol - send: { cellId, namespace, query }
 //           receive: { cellId, status: 'running' | 'done' | 'error', result?, error? }
 
 // singleton socket
@@ -29,13 +30,23 @@ function getWsUrl() {
 export function useQuerySocket() {
     const { setRunning, setResults, setError } = useCellStore()
     const handlersRef = useRef({ setRunning, setResults, setError })
+    const backendReady = useBackendReady()
 
     useEffect(() => {
         handlersRef.current = { setRunning, setResults, setError }
     }, [setRunning, setResults, setError])
 
+    // Gate on backendReady:
+    //  - Without this, the socket burns all MAX_RETRIES during the JVM startup
+    //    window and then gives up permanently, leaving queries broken until
+    //    the user manually reloads.
+    //  - retryCount is reset to 0 each time so the full retry budget is
+    //    available after readiness (e.g. after a backend restart).
     useEffect(() => {
+        if (!backendReady) return
+
         intentionalStop = false
+        retryCount = 0
 
         function connect() {
             if (
@@ -80,9 +91,8 @@ export function useQuerySocket() {
                 const { cellId, status, result, error: backendError } = msg
                 if (cellId === undefined || cellId === null) return
 
-                // Normalise to number — cell store uses numeric ids
-                const id = typeof cellId === 'string' ? parseInt(cellId, 10) : cellId
-                if (isNaN(id)) return // ignore responses for unknown/ping cellIds
+                // cellId is an opaque string - use it as-is
+                const id = String(cellId)
 
                 const { setRunning, setResults, setError } = handlersRef.current
 
@@ -108,11 +118,11 @@ export function useQuerySocket() {
             }
 
             socket.onclose = (event) => {
-                console.debug('[ws] closed — code:', event.code)
+                console.debug('[ws] closed - code:', event.code)
                 clearInterval(pingInterval)
                 socket = null
 
-                // If a query was in-flight, error it immediately —
+                // If a query was in-flight, error it immediately -
                 // don't leave the cell spinning with no feedback
                 if (inFlightCellId != null) {
                     handlersRef.current.setError(
@@ -123,7 +133,7 @@ export function useQuerySocket() {
                     inFlightCellId = null
                 }
 
-                // Intentional unmount — don't reconnect
+                // Intentional unmount - don't reconnect
                 if (intentionalStop) return
 
                 // Exponential backoff reconnect
@@ -138,7 +148,7 @@ export function useQuerySocket() {
                 const delay = BASE_BACKOFF_MS * Math.pow(2, retryCount)
                 retryCount++
                 console.info(
-                    `[ws] Reconnecting in ${delay}ms ` + `(attempt ${retryCount}/${MAX_RETRIES})…`
+                    `[ws] Reconnecting in ${delay}ms ` + `(attempt ${retryCount}/${MAX_RETRIES})...`
                 )
                 reconnectTimer = setTimeout(connect, delay)
             }
@@ -156,7 +166,7 @@ export function useQuerySocket() {
             clearInterval(pingInterval)
             intentionalStop = true
         }
-    }, [])
+    }, [backendReady])
 
     const runQuery = useCallback((cellId, namespace, sql) => {
         if (!socket || socket.readyState !== WebSocket.OPEN) {

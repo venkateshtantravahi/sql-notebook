@@ -23,17 +23,17 @@ import java.util.List;
  *   ~/.sqlnotebook/sources.json
  *
  * On every add/remove operation the file is atomically rewritten so a crash
- * mid-write never leaves a corrupt sources.json (same tmp → rename strategy
+ * mid-write never leaves a corrupt sources.json (same tmp -> rename strategy
  * used by DraftHandler).
  *
  * On app startup, Main calls rehydrate() which reads sources.json and
- * re-registers each entry with DuckDbRegistrar — restoring all namespaces
+ * re-registers each entry with DuckDbRegistrar  -  restoring all namespaces
  * without requiring the user to re-upload anything.
  *
  * S3 credential storage:
  *   Credentials are stored in sources.json. This file lives at
  *   ~/.sqlnotebook/ which is user-home-only on all platforms.
- *   We do NOT encrypt at rest in v1 — acceptable for a local-only desktop tool.
+ *   We do NOT encrypt at rest in v1  -  acceptable for a local-only desktop tool.
  *   A future improvement could derive a key from the machine UUID and encrypt
  *   the accessKeyId/secretAccessKey fields.
  *
@@ -68,7 +68,7 @@ public class FileSourceRegistry {
     private final DuckDbRegistrar registrar;
     private final ObjectMapper    mapper = new ObjectMapper();
 
-    // In-memory list — source of truth at runtime, sources.json is the durable copy
+    // In-memory list  -  source of truth at runtime, sources.json is the durable copy
     private final List<SourceEntry> entries = new ArrayList<>();
 
     public FileSourceRegistry(DuckDbRegistrar registrar) {
@@ -88,6 +88,23 @@ public class FileSourceRegistry {
      * @param filename  original filename (e.g. "sales data.csv")
      * @return          the namespace name assigned
      */
+    /**
+     * Register a file source with a user-supplied namespace name.
+     * Delegates to {@link DuckDbRegistrar#registerFile(String, String)}.
+     * Throws {@link DuckDbRegistrar.NamespaceConflictException} if the name is taken.
+     */
+    public synchronized String addFile(String filename, String namespaceHint) {
+        String namespace = registrar.registerFile(filename, namespaceHint);
+        entries.add(new SourceEntry(
+                "file", namespace, filename, null,
+                null, null, null, null,
+                Instant.now().toString()
+        ));
+        persist();
+        log.info("[sources] added file source '{}' -> namespace '{}'", filename, namespace);
+        return namespace;
+    }
+
     public synchronized String addFile(String filename) {
         String namespace = registrar.registerFile(filename);
 
@@ -98,7 +115,7 @@ public class FileSourceRegistry {
         ));
         persist();
 
-        log.info("[sources] added file source '{}' → namespace '{}'", filename, namespace);
+        log.info("[sources] added file source '{}' -> namespace '{}'", filename, namespace);
         return namespace;
     }
 
@@ -106,8 +123,8 @@ public class FileSourceRegistry {
      * Register a remote HTTP/S3 source and persist it.
      *
      * @param url        the remote URL
-     * @param label      user-supplied label used as namespace base (can be null — URL is used)
-     * @param s3Config   S3 credentials — null for HTTP sources
+     * @param label      user-supplied label used as namespace base (can be null  -  URL is used)
+     * @param s3Config   S3 credentials  -  null for HTTP sources
      * @return           the namespace name assigned
      */
     public synchronized String addRemote(String url, String label, DuckDbRegistrar.S3Config s3Config) {
@@ -124,12 +141,12 @@ public class FileSourceRegistry {
         ));
         persist();
 
-        log.info("[sources] added remote source '{}' → namespace '{}'", url, namespace);
+        log.info("[sources] added remote source '{}' -> namespace '{}'", url, namespace);
         return namespace;
     }
 
     /**
-     * Remove a source by namespace — deregisters from DuckDB and removes from sources.json.
+     * Remove a source by namespace  -  deregisters from DuckDB and removes from sources.json.
      * For file sources also deletes the uploaded file from disk.
      */
     public synchronized void remove(String namespace) {
@@ -172,7 +189,7 @@ public class FileSourceRegistry {
      */
     public synchronized void rehydrate() throws IOException {
         if (!Files.exists(SOURCES_FILE)) {
-            log.info("[sources] no sources.json found — fresh start");
+            log.info("[sources] no sources.json found  -  fresh start");
             return;
         }
 
@@ -181,7 +198,7 @@ public class FileSourceRegistry {
             JsonNode sourcesNode = root.path("sources");
 
             if (!sourcesNode.isArray()) {
-                log.warn("[sources] sources.json malformed — skipping rehydration");
+                log.warn("[sources] sources.json malformed  -  skipping rehydration");
                 return;
             }
 
@@ -203,7 +220,7 @@ public class FileSourceRegistry {
 
     /**
      * Atomically write the current entries list to sources.json.
-     * Uses tmp file → rename so a crash never leaves a partial write.
+     * Uses tmp file -> rename so a crash never leaves a partial write.
      */
     private void persist() {
         try {
@@ -220,7 +237,7 @@ public class FileSourceRegistry {
                 if (e.filename() != null) node.put("filename", e.filename());
                 if (e.url()      != null) node.put("url",      e.url());
 
-                // S3 fields — only written when non-null
+                // S3 fields  -  only written when non-null
                 if (e.s3Endpoint()        != null) node.put("s3Endpoint",        e.s3Endpoint());
                 if (e.s3Region()          != null) node.put("s3Region",          e.s3Region());
                 if (e.s3AccessKeyId()     != null) node.put("s3AccessKeyId",     e.s3AccessKeyId());
@@ -252,15 +269,17 @@ public class FileSourceRegistry {
             // Verify the upload file still exists
             Path uploadPath = resolveUploadPath(filename);
             if (uploadPath == null) {
-                log.warn("[sources] path traversal blocked for filename '{}' — skipping", filename);
+                log.warn("[sources] path traversal blocked for filename '{}'  -  skipping", filename);
                 return;
             }
             if (!Files.exists(uploadPath)) {
-                log.warn("[sources] upload file '{}' no longer exists — skipping", filename);
+                log.warn("[sources] upload file '{}' no longer exists  -  skipping", filename);
                 return;
             }
-            // Re-register via registrar (re-uses existing .db file if present)
-            registrar.registerFile(filename);
+            // Re-register via registrar using the stored namespace so the correct
+            // .db file is located regardless of whether the auto-generation logic
+            // has changed since the original registration.
+            registrar.registerFile(filename, namespace);
             entries.add(new SourceEntry(
                     "file", namespace, filename, null,
                     null, null, null, null, addedAt));
@@ -321,15 +340,15 @@ public class FileSourceRegistry {
     public record SourceEntry(
             String kind,              // "file" | "remote"
             String namespace,         // registered namespace name
-            String filename,          // original filename — file sources only
-            String url,               // remote URL — remote sources only
-            String s3Endpoint,        // custom S3 endpoint — nullable
-            String s3Region,          // AWS region — nullable
-            String s3AccessKeyId,     // S3 access key — nullable
-            String s3SecretAccessKey, // S3 secret — nullable
+            String filename,          // original filename  -  file sources only
+            String url,               // remote URL  -  remote sources only
+            String s3Endpoint,        // custom S3 endpoint  -  nullable
+            String s3Region,          // AWS region  -  nullable
+            String s3AccessKeyId,     // S3 access key  -  nullable
+            String s3SecretAccessKey, // S3 secret  -  nullable
             String addedAt            // ISO-8601 timestamp
     ) {
-        /** Safe view for API responses — strips S3 secret from serialisation */
+        /** Safe view for API responses  -  strips S3 secret from serialisation */
         public ObjectNode toApiNode(ObjectMapper mapper) {
             ObjectNode node = mapper.createObjectNode();
             node.put("kind",      kind);

@@ -55,7 +55,7 @@ function buildPayload(form) {
     }
 }
 
-// Reverse map backend type → form value
+// Reverse map backend type -> form value
 function backendTypeToFormValue(backendType) {
     const found = DB_TYPES.find((d) => d.backendType === backendType)
     return found?.value ?? 'mysql'
@@ -75,8 +75,11 @@ function ConfigModal() {
     const overlayRef = useRef(null)
     const isSQLite = form.type === 'sqlite'
 
-    // Fetch server home dir once
+    // Fetch server home dir the first time the modal opens.
+    // Deferring until open means this never fires during startup before the
+    // backend is ready, and skips re-fetching on subsequent opens.
     useEffect(() => {
+        if (!isOpen || homeDir) return
         fetch('/system/info')
             .then((r) => (r.ok ? r.json() : null))
             .then((data) => {
@@ -84,7 +87,7 @@ function ConfigModal() {
                 if (data?.separator) setSeparator(data.separator)
             })
             .catch(() => {})
-    }, [])
+    }, [isOpen]) // eslint-disable-line react-hooks/exhaustive-deps
 
     // When modal opens reset or pre-fill
     useEffect(() => {
@@ -241,7 +244,7 @@ function ConfigModal() {
                         <div>
                             <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100">
                                 {isEdit
-                                    ? `Edit Connection — ${editConnection.namespace}`
+                                    ? `Edit Connection -- ${editConnection.namespace}`
                                     : 'Add Database Connection'}
                             </h2>
                             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
@@ -261,7 +264,11 @@ function ConfigModal() {
                     {/* Form */}
                     <div className="px-5 py-4 flex flex-col gap-4">
                         <div className="grid grid-cols-2 gap-3">
-                            <Field label="Namespace name *" error={errors.namespace}>
+                            <Field
+                                label="Namespace name *"
+                                htmlFor="conn-namespace"
+                                error={errors.namespace}
+                            >
                                 <Input
                                     id="conn-namespace"
                                     name="conn-namespace"
@@ -271,7 +278,7 @@ function ConfigModal() {
                                     onChange={(e) => handleChange('namespace', e.target.value)}
                                 />
                             </Field>
-                            <Field label="Database type *">
+                            <Field label="Database type *" htmlFor="conn-type">
                                 <select
                                     id="conn-type"
                                     name="conn-type"
@@ -291,7 +298,7 @@ function ConfigModal() {
                         {!isSQLite && (
                             <div className="grid grid-cols-3 gap-3">
                                 <div className="col-span-2">
-                                    <Field label="Host *" error={errors.host}>
+                                    <Field label="Host *" htmlFor="conn-host" error={errors.host}>
                                         <Input
                                             id="conn-host"
                                             name="conn-host"
@@ -302,7 +309,7 @@ function ConfigModal() {
                                         />
                                     </Field>
                                 </div>
-                                <Field label="Port *" error={errors.port}>
+                                <Field label="Port *" htmlFor="conn-port" error={errors.port}>
                                     <Input
                                         id="conn-port"
                                         name="conn-port"
@@ -317,6 +324,7 @@ function ConfigModal() {
 
                         <Field
                             label={isSQLite ? 'File path *' : 'Database name *'}
+                            htmlFor="conn-database"
                             error={errors.database}
                         >
                             {isSQLite ? (
@@ -357,7 +365,11 @@ function ConfigModal() {
 
                         {!isSQLite && (
                             <div className="grid grid-cols-2 gap-3">
-                                <Field label="Username *" error={errors.username}>
+                                <Field
+                                    label="Username *"
+                                    htmlFor="conn-username"
+                                    error={errors.username}
+                                >
                                     <Input
                                         id="conn-username"
                                         name="conn-username"
@@ -369,12 +381,13 @@ function ConfigModal() {
                                 </Field>
                                 <Field
                                     label={isEdit ? 'Password (leave blank to keep)' : 'Password'}
+                                    htmlFor="conn-password"
                                 >
                                     <Input
                                         id="conn-password"
                                         name="conn-password"
                                         type="password"
-                                        placeholder="••••••••"
+                                        placeholder="--------"
                                         value={form.password}
                                         onChange={(e) => handleChange('password', e.target.value)}
                                     />

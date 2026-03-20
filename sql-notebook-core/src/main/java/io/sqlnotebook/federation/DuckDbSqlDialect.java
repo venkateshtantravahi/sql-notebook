@@ -7,7 +7,7 @@ import org.apache.calcite.sql.SqlDialect;
  * Minimal Calcite SQL dialect for DuckDB.
  *
  * DuckDB is close to standard SQL but uses double-quoted identifiers and
- * sorts NULLs high (NULLS LAST in ASC, NULLS FIRST in DESC — opposite of most
+ * sorts NULLs high (NULLS LAST in ASC, NULLS FIRST in DESC  -  opposite of most
  * databases). This dialect ensures Calcite generates compatible pushdown SQL.
  *
  * Why UNKNOWN product type?
@@ -28,7 +28,7 @@ public class DuckDbSqlDialect extends SqlDialect {
         super(context);
     }
 
-    /** DuckDB does not support CHAR SET clauses — suppress them in generated SQL. */
+    /** DuckDB does not support CHAR SET clauses  -  suppress them in generated SQL. */
     @Override
     public boolean supportsCharSet() {
         return false;

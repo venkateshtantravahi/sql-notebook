@@ -63,7 +63,7 @@ function ResultsTable({ results, error, status }) {
 
     return (
         <div className="border-t border-gray-200 dark:border-gray-700">
-            {/* Truncation warning — shown when backend capped the result set */}
+            {/* Truncation warning  -  shown when backend capped the result set */}
             {results.truncated && (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800">
                     <LuTriangleAlert
@@ -71,7 +71,7 @@ function ResultsTable({ results, error, status }) {
                         className="shrink-0 text-amber-500 dark:text-amber-400"
                     />
                     <span className="text-xs text-amber-700 dark:text-amber-300">
-                        Results truncated to 10,000 rows — add a{' '}
+                        Results truncated to 10,000 rows -- add a{' '}
                         <code className="font-mono">LIMIT</code> or{' '}
                         <code className="font-mono">WHERE</code> clause to narrow down.
                     </span>
@@ -90,7 +90,7 @@ function ResultsTable({ results, error, status }) {
                     Results
                 </span>
                 <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">
-                    {totalRows.toLocaleString()} rows · {results.duration}ms
+                    {totalRows.toLocaleString()} rows | {results.duration}ms
                 </span>
             </div>
 
@@ -175,12 +175,12 @@ function ResultsTable({ results, error, status }) {
 
                         {/* Page number pills */}
                         {buildPageRange(page, totalPages).map((p, i) =>
-                            p === '…' ? (
+                            p === '...' ? (
                                 <span
                                     key={`ellipsis-${i}`}
                                     className="text-xs text-gray-300 dark:text-gray-700 px-1"
                                 >
-                                    …
+                                    ...
                                 </span>
                             ) : (
                                 <button
@@ -234,7 +234,7 @@ function PagBtn({ onClick, disabled, title, children }) {
 
 /**
  * Builds a compact page number array with ellipsis.
- * e.g. page=5, total=20 → [1, '…', 4, 5, 6, '…', 20]
+ * e.g. page=5, total=20 -> [1, '...', 4, 5, 6, '...', 20]
  */
 function buildPageRange(current, total) {
     if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
@@ -244,7 +244,7 @@ function buildPageRange(current, total) {
     const sorted = Array.from(pages).sort((a, b) => a - b)
     const result = []
     for (let i = 0; i < sorted.length; i++) {
-        if (i > 0 && sorted[i] - sorted[i - 1] > 1) result.push('…')
+        if (i > 0 && sorted[i] - sorted[i - 1] > 1) result.push('...')
         result.push(sorted[i])
     }
     return result

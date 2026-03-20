@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import useSidebarStore from '../../store/useSidebarStore.js'
 import { LuRefreshCw, LuChevronDown, LuChevronUp } from 'react-icons/lu'
 
-// Colour-coded null % bar: green → yellow → red as nulls rise
+// Colour-coded null % bar: green -> yellow -> red as nulls rise
 function NullBar({ pct }) {
     const colour =
         pct === 0
@@ -23,7 +23,7 @@ function NullBar({ pct }) {
     )
 }
 
-// Single column card — collapsed by default, expands on click
+// Single column card  -  collapsed by default, expands on click
 function ColumnCard({ col }) {
     const [expanded, setExpanded] = useState(false)
     const nullPctFmt = col.nullPct.toFixed(1)
@@ -38,7 +38,7 @@ function ColumnCard({ col }) {
                 hover:border-blue-300 dark:hover:border-blue-700
             "
         >
-            {/* Header row — always visible */}
+            {/* Header row  -  always visible */}
             <button
                 onClick={() => setExpanded((v) => !v)}
                 className="w-full flex items-center gap-2 px-2 py-1.5 text-left"
@@ -59,7 +59,7 @@ function ColumnCard({ col }) {
                 )}
             </button>
 
-            {/* Null bar — always visible below header */}
+            {/* Null bar  -  always visible below header */}
             <div className="px-2 pb-1.5">
                 <NullBar pct={col.nullPct} />
                 <div className="flex items-center justify-between mt-0.5">
@@ -77,8 +77,8 @@ function ColumnCard({ col }) {
                 <div className="border-t border-gray-100 dark:border-gray-700 px-2 py-1.5 grid grid-cols-2 gap-x-2 gap-y-1">
                     <StatRow label="Rows" value={fmtNum(col.rowCount)} />
                     <StatRow label="Nulls" value={fmtNum(col.nullCount)} />
-                    <StatRow label="Min" value={col.min || '—'} />
-                    <StatRow label="Max" value={col.max || '—'} />
+                    <StatRow label="Min" value={col.min || '--'} />
+                    <StatRow label="Max" value={col.max || '--'} />
                     {hasStats && (
                         <>
                             <StatRow label="Mean" value={fmtDecimal(col.mean)} />
@@ -108,14 +108,14 @@ function StatRow({ label, value }) {
 }
 
 function fmtNum(n) {
-    if (n == null) return '—'
+    if (n == null) return '--'
     if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
     if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K'
     return String(n)
 }
 
 function fmtDecimal(s) {
-    if (!s && s !== 0) return '—'
+    if (!s && s !== 0) return '--'
     const n = parseFloat(s)
     return isNaN(n) ? s : n.toFixed(2)
 }
@@ -165,7 +165,7 @@ export default function DataProfiler() {
                     if (!ct.includes('application/json')) {
                         throw new Error(
                             r.ok
-                                ? 'Backend returned non-JSON — is /profile proxied? (vite.config.js)'
+                                ? 'Backend returned non-JSON - is /profile proxied? (vite.config.js)'
                                 : `HTTP ${r.status}`
                         )
                     }
@@ -293,7 +293,7 @@ export default function DataProfiler() {
                             {profile.table}
                         </span>
                         <span className="ml-auto text-[10px] tabular-nums text-gray-400 dark:text-gray-500 shrink-0">
-                            {fmtNum(profile.columns[0]?.rowCount ?? 0)} rows ·{' '}
+                            {fmtNum(profile.columns[0]?.rowCount ?? 0)} rows |{' '}
                             {profile.columns.length} cols
                         </span>
                     </div>
@@ -305,7 +305,9 @@ export default function DataProfiler() {
                             size={20}
                             className="animate-spin text-blue-400 dark:text-blue-500"
                         />
-                        <span className="text-xs text-gray-400 dark:text-gray-500">Profiling…</span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                            Profiling...
+                        </span>
                     </div>
                 )}
 

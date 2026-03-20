@@ -233,7 +233,7 @@ function SchemaExplorer({ activeNamespace }) {
                     ))}
                 </div>
             ) : (
-                // ERD fills remaining height — user can resize sidebar for more space
+                // ERD fills remaining height - user can resize sidebar for more space
                 <div className="flex-1 overflow-hidden">
                     <SchemaErd tables={erdTables} isDark={isDark} />
                 </div>

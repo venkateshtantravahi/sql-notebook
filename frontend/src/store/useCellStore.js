@@ -1,155 +1,195 @@
 import { create } from 'zustand'
 
-let nextId = 1
+// ---------------------------------------------------------------------------
+// ID generation
+// ---------------------------------------------------------------------------
+
+function makeId() {
+    const arr = new Uint8Array(4)
+    crypto.getRandomValues(arr)
+    return (
+        'c_' +
+        Array.from(arr)
+            .map((b) => b.toString(16).padStart(2, '0'))
+            .join('')
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Source serialisation helpers
+// Internal state: plain string (easy for editors)
+// On-disk format: array of lines (git-diffable)
+// ---------------------------------------------------------------------------
+
+export function sourceToLines(str) {
+    if (!str) return []
+    const lines = str.split('\n')
+    const result = lines.map((l, i) => (i < lines.length - 1 ? l + '\n' : l))
+    // drop trailing empty string produced by a source that ends with \n
+    if (result.length > 0 && result[result.length - 1] === '') result.pop()
+    return result
+}
+
+export function linesToSource(arr) {
+    if (Array.isArray(arr)) return arr.join('')
+    if (typeof arr === 'string') return arr
+    return ''
+}
+
+// ---------------------------------------------------------------------------
+// Cell factory
+// ---------------------------------------------------------------------------
 
 function makeCell(overrides = {}) {
     return {
-        id: nextId++,
-        type: 'sql', // 'sql' | 'markdown'
-        query: '', // sql content (type === 'sql')
-        content: '', // markdown content (type === 'markdown')
+        id: makeId(),
+        type: 'sql',
+        source: '', // unified field: SQL query or markdown text
         namespace: null,
-        status: 'idle', // idle | running | done | error
-        results: null, // { columns: [], rows: [], rowCount, duration }
+        attachments: null, // { [filename]: { mimeType, encoding, size, width, height, data } } | null
+        status: 'idle',
+        results: null,
         error: null,
         ...overrides,
     }
 }
 
+// ---------------------------------------------------------------------------
+// Store
+// ---------------------------------------------------------------------------
+
 const useCellStore = create((set, get) => ({
     cells: [],
 
-    addCell: (type = 'sql') =>
-        set((state) => ({
-            cells: [...state.cells, makeCell({ type })],
-        })),
+    addCell: (type = 'sql') => set((s) => ({ cells: [...s.cells, makeCell({ type })] })),
 
-    deleteCell: (id) =>
-        set((state) => ({
-            cells: state.cells.filter((c) => c.id !== id),
-        })),
+    deleteCell: (id) => set((s) => ({ cells: s.cells.filter((c) => c.id !== id) })),
 
-    updateQuery: (id, query) =>
-        set((state) => ({
-            cells: state.cells.map((c) => (c.id === id ? { ...c, query } : c)),
-        })),
-
-    updateContent: (id, content) =>
-        set((state) => ({
-            cells: state.cells.map((c) => (c.id === id ? { ...c, content } : c)),
-        })),
+    // Unified update for both SQL and markdown source
+    updateSource: (id, source) =>
+        set((s) => ({ cells: s.cells.map((c) => (c.id === id ? { ...c, source } : c)) })),
 
     updateNamespace: (id, namespace) =>
-        set((state) => ({
-            cells: state.cells.map((c) => (c.id === id ? { ...c, namespace } : c)),
+        set((s) => ({ cells: s.cells.map((c) => (c.id === id ? { ...c, namespace } : c)) })),
+
+    // Adds or replaces a single attachment on a markdown cell
+    updateAttachment: (id, filename, meta) =>
+        set((s) => ({
+            cells: s.cells.map((c) => {
+                if (c.id !== id) return c
+                return { ...c, attachments: { ...(c.attachments ?? {}), [filename]: meta } }
+            }),
         })),
 
     setRunning: (id) =>
-        set((state) => ({
-            cells: state.cells.map((c) =>
+        set((s) => ({
+            cells: s.cells.map((c) =>
                 c.id === id ? { ...c, status: 'running', results: null, error: null } : c
             ),
         })),
 
     setResults: (id, results) =>
-        set((state) => ({
-            cells: state.cells.map((c) => (c.id === id ? { ...c, status: 'done', results } : c)),
+        set((s) => ({
+            cells: s.cells.map((c) => (c.id === id ? { ...c, status: 'done', results } : c)),
         })),
 
     setError: (id, error) =>
-        set((state) => ({
-            cells: state.cells.map((c) => (c.id === id ? { ...c, status: 'error', error } : c)),
+        set((s) => ({
+            cells: s.cells.map((c) => (c.id === id ? { ...c, status: 'error', error } : c)),
         })),
 
-    // Returns a serialisable snapshot of current cells for notebook save
-    getSnapshot: () => {
-        return get().cells.map((c) => ({
-            id: c.id,
-            type: c.type,
-            query: c.query,
-            content: c.content,
-            namespace: c.namespace,
-        }))
-    },
+    // Returns the v2-format serialisable snapshot (source as array of lines)
+    getSnapshot: () =>
+        get().cells.map((c) => {
+            const cell = {
+                id: c.id,
+                type: c.type,
+                source: sourceToLines(c.source),
+                metadata: {},
+            }
+            if (c.namespace) cell.namespace = c.namespace
+            if (c.attachments && Object.keys(c.attachments).length > 0) {
+                cell.attachments = c.attachments
+            }
+            return cell
+        }),
 
-    // Loads cells from a saved snapshot — resets results/status
+    // Loads cells from a v2 snapshot (or v1 for backward compat with existing drafts)
     loadSnapshot: (snapshots) => {
-        const cells = snapshots.map((s) =>
-            makeCell({
-                id: s.id,
+        const cells = snapshots.map((s) => {
+            // v2: source is array-of-lines; v1: query/content are strings
+            let source
+            if (s.source !== undefined) {
+                source = linesToSource(s.source)
+            } else {
+                source = s.type === 'markdown' ? (s.content ?? '') : (s.query ?? '')
+            }
+            return makeCell({
+                id: typeof s.id === 'string' ? s.id : `c_${s.id}`,
                 type: s.type ?? 'sql',
-                query: s.query ?? '',
-                content: s.content ?? '',
+                source,
                 namespace: s.namespace ?? null,
+                attachments: s.attachments ?? null,
             })
-        )
-        // Keep nextId above any loaded id to avoid collisions
-        if (cells.length > 0) {
-            nextId = Math.max(...cells.map((c) => c.id)) + 1
-        }
+        })
         set({ cells })
     },
 
     insertAfter: (afterId, type = 'sql') =>
-        set((state) => {
-            const idx = state.cells.findIndex((c) => c.id === afterId)
-            if (idx === -1) return { cells: [...state.cells, makeCell({ type })] }
-            const next = [...state.cells]
+        set((s) => {
+            const idx = s.cells.findIndex((c) => c.id === afterId)
+            if (idx === -1) return { cells: [...s.cells, makeCell({ type })] }
+            const next = [...s.cells]
             next.splice(idx + 1, 0, makeCell({ type }))
             return { cells: next }
         }),
 
     moveUp: (id) =>
-        set((state) => {
-            const idx = state.cells.findIndex((c) => c.id === id)
+        set((s) => {
+            const idx = s.cells.findIndex((c) => c.id === id)
             if (idx <= 0) return {}
-            const next = [...state.cells]
+            const next = [...s.cells]
             ;[next[idx - 1], next[idx]] = [next[idx], next[idx - 1]]
             return { cells: next }
         }),
 
     moveDown: (id) =>
-        set((state) => {
-            const idx = state.cells.findIndex((c) => c.id === id)
-            if (idx === -1 || idx >= state.cells.length - 1) return {}
-            const next = [...state.cells]
+        set((s) => {
+            const idx = s.cells.findIndex((c) => c.id === id)
+            if (idx === -1 || idx >= s.cells.length - 1) return {}
+            const next = [...s.cells]
             ;[next[idx], next[idx + 1]] = [next[idx + 1], next[idx]]
             return { cells: next }
         }),
 
     clearCells: () => set({ cells: [] }),
 
-    // draft init
-    // called once on app mount Fetches GET /draft from backend.
-    // 200 -> cells + title into stores
-    // 204 -> first launch, stay blank
-    // error -> log and stay blank (never block app from starting)
+    // Called once on app mount - restores cells + returns title and full notebook data
     initFromDraft: async () => {
-        // Single helper so the retry path reuses the same logic
         async function attemptFetch() {
             const res = await fetch('/draft')
-            if (res.status === 204) return { title: null }
+            if (res.status === 204) return { title: null, notebookData: null }
             if (!res.ok) {
-                console.warn('[draft] GET /draft returned', res.status, '-- starting blank')
-                return { title: null }
+                console.warn('[draft] GET /draft returned', res.status, '- starting blank')
+                return { title: null, notebookData: null }
             }
             const data = await res.json()
             if (Array.isArray(data.cells) && data.cells.length > 0) {
                 get().loadSnapshot(data.cells)
             }
-            return { title: data.title ?? null }
+            const title = data.metadata?.title ?? data.title ?? null
+            return { title, notebookData: data }
         }
 
         try {
             return await attemptFetch()
         } catch {
-            // Backend may not be ready yet (dev restart) — retry once after a short delay
             try {
                 await new Promise((r) => setTimeout(r, 900))
                 return await attemptFetch()
             } catch (err) {
                 console.warn('[draft] Could not reach backend for draft restore:', err.message)
-                return { title: null }
+                return { title: null, notebookData: null }
             }
         }
     },

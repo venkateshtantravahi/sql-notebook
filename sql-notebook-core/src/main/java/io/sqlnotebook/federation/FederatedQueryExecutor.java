@@ -25,14 +25,14 @@ import java.util.regex.Pattern;
  *
  * Two execution paths:
  *
- *   Fast path — DuckDB ATTACH:
+ *   Fast path  -  DuckDB ATTACH:
  *     When every referenced namespace is a local DuckDB file, we open a
  *     fresh in-process DuckDB connection, ATTACH each .db file READ_ONLY,
  *     and execute the user's SQL directly. DuckDB handles the join inside
- *     its columnar engine — no Java-side in-memory merge, full predicate
+ *     its columnar engine  -  no Java-side in-memory merge, full predicate
  *     pushdown, and row-group skipping on Parquet sources.
  *
- *   Slow path — Apache Calcite:
+ *   Slow path  -  Apache Calcite:
  *     Used when namespaces span different engine types (e.g. DuckDB + Postgres).
  *     Calcite builds a virtual schema from each JdbcSchema and executes an
  *     in-memory federated join.
@@ -90,13 +90,13 @@ public class FederatedQueryExecutor {
                         "Use namespace.tableName or namespace.data syntax.");
             }
 
-            // Fast path: all local DuckDB files → native ATTACH (vectorized, no Java-side join)
+            // Fast path: all local DuckDB files -> native ATTACH (vectorized, no Java-side join)
             if (allLocalDuckDb(namespaces)) {
                 log.debug("[federation] fast path: DuckDB ATTACH for namespaces={}", namespaces);
                 return runDuckDbAttach(sql, namespaces, start);
             }
 
-            // Slow path: cross-engine → Calcite in-memory join
+            // Slow path: cross-engine -> Calcite in-memory join
             log.debug("[federation] slow path: Calcite for namespaces={}", namespaces);
             return runCalcite(sql, namespaces, start);
 
@@ -109,7 +109,7 @@ public class FederatedQueryExecutor {
 
     /**
      * Returns true when every namespace is a DuckDB type whose database
-     * field points to an existing local .db file — safe to ATTACH.
+     * field points to an existing local .db file  -  safe to ATTACH.
      */
     private boolean allLocalDuckDb(Set<String> namespaces) {
         return namespaces.stream().allMatch(ns -> {
@@ -121,7 +121,7 @@ public class FederatedQueryExecutor {
     /**
      * Fast-path: ATTACH each namespace's .db file into a fresh in-process
      * DuckDB connection and execute the SQL directly. The user's SQL needs
-     * no rewriting — DuckDB resolves `ns.data` as `attached_db.main.data`.
+     * no rewriting  -  DuckDB resolves `ns.data` as `attached_db.main.data`.
      */
     private QueryResult runDuckDbAttach(String sql, Set<String> namespaces, long start) {
         try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {

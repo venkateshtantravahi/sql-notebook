@@ -32,16 +32,16 @@ import java.util.Set;
  *   Each file source gets its own DuckDB database file at:
  *     ~/.sqlnotebook/duckdb/<namespace>.db
  *
- *   This means each namespace is isolated — no cross-contamination between
+ *   This means each namespace is isolated  -  no cross-contamination between
  *   uploaded files. The database file persists across restarts, so DuckDB
  *   doesn't need to re-read the source file on every startup (it caches schema
  *   and stats). The source file itself lives in ~/.sqlnotebook/uploads/.
  *
  * Extension loading:
  *   DuckDB extensions are loaded once per database file on first connection.
- *   httpfs  — required for S3 and HTTP URL sources
- *   excel   — required for .xlsx files
- *   Both extensions are bundled with DuckDB 1.x — no separate download needed.
+ *   httpfs   -  required for S3 and HTTP URL sources
+ *   excel    -  required for .xlsx files
+ *   Both extensions are bundled with DuckDB 1.x  -  no separate download needed.
  *
  * S3 compatibility:
  *   Supports AWS S3, Cloudflare R2, MinIO, DigitalOcean Spaces, Backblaze B2
@@ -85,14 +85,32 @@ public class DuckDbRegistrar {
 
     /**
      * Register a local uploaded file as a DuckDB namespace.
+     * The namespace is derived from the filename stem (extension stripped) so that
+     * {@code sales.csv} becomes {@code sales} rather than {@code sales_csv}.
      *
      * @param fileName  original filename including extension (e.g. "sales data.csv")
      * @return          the sanitised namespace name that was registered
      * @throws DuckDbRegistrarException if the file type is unsupported or registration fails
      */
     public String registerFile(String fileName) {
+        return registerFile(fileName, stemOf(fileName));
+    }
+
+    /**
+     * Register a local uploaded file using an explicit namespace name supplied by the caller.
+     * Useful when the user has chosen a custom name or when rehydrating an existing registration.
+     *
+     * @param fileName          original filename including extension
+     * @param explicitNamespace desired namespace  -  sanitised and uniquified before use
+     * @throws DuckDbRegistrarException     if the file type is unsupported or registration fails
+     * @throws NamespaceConflictException   if the sanitised name already exists
+     */
+    public String registerFile(String fileName, String explicitNamespace) {
         String ext = FileUtils.extension(fileName);
-        String namespace = uniqueNamespace(sanitise(fileName));
+        String namespace = sanitise(explicitNamespace);
+        if (registry.hasNamespace(namespace)) {
+            throw new NamespaceConflictException(namespace, uniqueNamespace(namespace));
+        }
 
         validateExtension(ext);
 
@@ -126,7 +144,7 @@ public class DuckDbRegistrar {
      *
      * @param url         the remote URL (https://... or s3://...)
      * @param namespace   desired namespace name (will be sanitised + uniquified)
-     * @param s3Config    S3 credentials — null for HTTP sources or public S3
+     * @param s3Config    S3 credentials  -  null for HTTP sources or public S3
      * @return            the final namespace name registered
      */
     public String registerRemote(String url, String namespace, S3Config s3Config) {
@@ -135,7 +153,7 @@ public class DuckDbRegistrar {
         String jdbcUrl = "jdbc:duckdb:" + dbFile;
         String ext = inferRemoteExtension(url);
 
-        // Build S3 props first — the init connection needs them too, because DuckDB
+        // Build S3 props first  -  the init connection needs them too, because DuckDB
         // performs schema inference (reads the remote file) during CREATE VIEW.
         Properties s3JdbcProps = buildS3JdbcProperties(s3Config);
         initialiseRemote(jdbcUrl, url, sanitised, ext, s3JdbcProps);
@@ -146,7 +164,7 @@ public class DuckDbRegistrar {
         );
 
         // S3 credentials must be present on every pooled connection, not just the init
-        // connection. We achieve this by passing them as JDBC properties to HikariCP —
+        // connection. We achieve this by passing them as JDBC properties to HikariCP  - 
         // DuckDB's JDBC driver accepts all DuckDB config options (including s3_*) as
         // connection properties and applies them at the session level on each new connection.
         if (s3JdbcProps.isEmpty()) {
@@ -161,7 +179,7 @@ public class DuckDbRegistrar {
 
     /**
      * Deregister a DuckDB namespace and delete its .db file.
-     * The original source file is NOT deleted here — FileSourceHandler handles that.
+     * The original source file is NOT deleted here  -  FileSourceHandler handles that.
      */
     public void deregister(String namespace) {
         registry.deregister(namespace);
@@ -226,10 +244,10 @@ public class DuckDbRegistrar {
      * Sanitise a filename or URL fragment into a valid namespace identifier.
      *
      * Examples:
-     *   "sales data.csv"      → "sales_data_csv"
-     *   "orders (2).parquet"  → "orders_2_parquet"
-     *   "https://s3.amazonaws.com/my-bucket/data.json" → "data_json"
-     *   "s3://my-bucket/folder/users.csv" → "users_csv"
+     *   "sales data.csv"      -> "sales_data_csv"
+     *   "orders (2).parquet"  -> "orders_2_parquet"
+     *   "https://s3.amazonaws.com/my-bucket/data.json" -> "data_json"
+     *   "s3://my-bucket/folder/users.csv" -> "users_csv"
      */
     public static String sanitise(String raw) {
         // For URLs take just the last path segment
@@ -257,7 +275,7 @@ public class DuckDbRegistrar {
     }
 
     /**
-     * Ensure the namespace is unique — appends _2, _3 etc. if collision exists.
+     * Ensure the namespace is unique  -  appends _2, _3 etc. if collision exists.
      */
     public String uniqueNamespace(String base) {
         if (!registry.hasNamespace(base)) return base;
@@ -312,7 +330,7 @@ public class DuckDbRegistrar {
             stmt.execute("INSTALL httpfs");
             stmt.execute("LOAD httpfs");
 
-            // Create views over the remote URL — namespace-named for regular queries,
+            // Create views over the remote URL  -  namespace-named for regular queries,
             // "data" alias for federation SQL: SELECT * FROM ns.data JOIN other.data
             String readFn = readFunction(url, ext);
             stmt.execute("CREATE OR REPLACE VIEW \"%s\" AS SELECT * FROM %s"
@@ -343,7 +361,7 @@ public class DuckDbRegistrar {
             case "parquet"            -> "read_parquet(%s)".formatted(q);
             case "arrow"              -> "read_arrow(%s)".formatted(q);
             case "xlsx", "xls"        -> "read_xlsx(%s)".formatted(q);
-            // read_auto does not exist in DuckDB 1.x — fall back to csv auto-detect
+            // read_auto does not exist in DuckDB 1.x  -  fall back to csv auto-detect
             // which handles TSV and most delimited text formats via sniffing
             default                   -> "read_csv_auto(%s)".formatted(q);
         };
@@ -369,7 +387,7 @@ public class DuckDbRegistrar {
      *
      * DuckDB's JDBC driver passes all Properties entries as DuckDB configuration
      * options at session initialisation. Providing s3_* settings here means every
-     * connection that HikariCP opens carries the correct endpoint/credentials —
+     * connection that HikariCP opens carries the correct endpoint/credentials  - 
      * this is the only reliable way to ensure S3 config is present at query time,
      * since session-level SET statements and in-memory secrets are lost when the
      * init connection closes and HikariCP opens a fresh pooled connection.
@@ -379,7 +397,7 @@ public class DuckDbRegistrar {
         if (s3 == null) return props;
 
         if (s3.endpoint() != null && !s3.endpoint().isBlank()) {
-            // DuckDB expects host:port — strip any protocol prefix
+            // DuckDB expects host:port  -  strip any protocol prefix
             props.setProperty("s3_endpoint", s3.endpoint().replaceFirst("^https?://", ""));
             props.setProperty("s3_url_style", "path");
             if (s3.endpoint().startsWith("http://")) {
@@ -443,7 +461,7 @@ public class DuckDbRegistrar {
 
     /**
      * S3 credentials and endpoint configuration.
-     * All fields are optional — null means use DuckDB/AWS defaults.
+     * All fields are optional  -  null means use DuckDB/AWS defaults.
      *
      * @param endpoint      custom endpoint URL for non-AWS providers
      *                      (e.g. "https://account.r2.cloudflarestorage.com")
@@ -480,5 +498,22 @@ public class DuckDbRegistrar {
     public static class DuckDbRegistrarException extends RuntimeException {
         public DuckDbRegistrarException(String message) { super(message); }
         public DuckDbRegistrarException(String message, Throwable cause) { super(message, cause); }
+    }
+
+    /** Thrown when a user-supplied namespace already exists in the registry. */
+    public static class NamespaceConflictException extends RuntimeException {
+        public final String taken;
+        public final String suggested;
+        public NamespaceConflictException(String taken, String suggested) {
+            super("Namespace '" + taken + "' already exists");
+            this.taken     = taken;
+            this.suggested = suggested;
+        }
+    }
+
+    /** Strips the file extension from a filename, returning the stem. */
+    private static String stemOf(String filename) {
+        int dot = filename.lastIndexOf('.');
+        return (dot > 0) ? filename.substring(0, dot) : filename;
     }
 }

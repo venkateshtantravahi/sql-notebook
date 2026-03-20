@@ -100,7 +100,7 @@ public class ConfigParserTest {
 
     @Test
     void returnsEmptyMapWhenFileNotFound() {
-        // New behaviour — missing file is not an error, app starts with no connections
+        // New behaviour  -  missing file is not an error, app starts with no connections
         Map<String, ConnectionConfig> result = parser.parse("/nonexistent/sql.properties");
         assertNotNull(result);
         assertTrue(result.isEmpty());

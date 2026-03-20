@@ -31,7 +31,7 @@ import java.util.Set;
  *   ]
  * }
  *
- * Only .db / .sqlite / .sqlite3 files are included — directories are
+ * Only .db / .sqlite / .sqlite3 files are included  -  directories are
  * always included so the user can navigate. Hidden files (dot-files)
  * are excluded.
  *
@@ -62,7 +62,7 @@ public class FileBrowserHandler extends HttpServlet {
         if (os.contains("mac")) {
             return List.of(userHome, new File("/Volumes"), new File("/tmp"));
         } else if (os.contains("win")) {
-            // Allow all drive roots (C:\, D:\, etc.) — Windows users
+            // Allow all drive roots (C:\, D:\, etc.)  -  Windows users
             // commonly store databases on non-system drives
             File[] roots = File.listRoots();
             var list = new java.util.ArrayList<File>();
@@ -85,7 +85,7 @@ public class FileBrowserHandler extends HttpServlet {
             rawPath = System.getProperty("user.home");
         }
 
-        // Reject null bytes — a classic path traversal trick
+        // Reject null bytes  -  a classic path traversal trick
         if (rawPath.indexOf('\0') >= 0) {
             sendError(resp, 400, "Invalid path");
             return;
