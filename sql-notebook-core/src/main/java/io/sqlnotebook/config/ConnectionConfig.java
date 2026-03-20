@@ -4,7 +4,7 @@ package io.sqlnotebook.config;
  * Immutable representation of a single database connection configuration.
  *
  * @param namespace The unique name identifying this connection (e.g. "prod_mysql").
- * @param type      The database engine — mysql, postgresql, sqlite, oracle, microsoft-sql-server.
+ * @param type      The database engine  -  mysql, postgresql, sqlite, oracle, microsoft-sql-server.
  * @param host      Hostname or IP of the database server. Empty string for SQLite.
  * @param port      Port number. 0 for SQLite.
  * @param database  Database/schema name. File path for SQLite.

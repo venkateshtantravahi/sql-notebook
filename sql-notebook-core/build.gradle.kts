@@ -124,6 +124,61 @@ tasks.named<Javadoc>("javadoc") {
     }
 }
 
+// ---------------------------------------------------------------------------
+// jpackage  —  creates a native installer with .sqlnb file-type association.
+//
+// Platform output (jpackage must be run on the target OS):
+//   macOS   →  build/package/sql-notebook-<ver>.dmg  +  sql-notebook.app
+//   Linux   →  build/package/sql-notebook-<ver>.deb  (or .rpm with --type rpm)
+//   Windows →  build/package/sql-notebook-<ver>.msi  (or .exe with --type exe)
+//
+// Requires JDK 14+ (jpackage ships with the JDK since JDK 14).
+//   macOS also needs Xcode command-line tools.
+//   Linux  also needs fakeroot + dpkg-deb (for .deb) or rpmbuild (for .rpm).
+//   Windows also needs WiX Toolset 3.x (for .msi).
+//
+// Usage:
+//   ./gradlew installDist jpackageApp
+//
+// Output is placed in build/package/.
+// ---------------------------------------------------------------------------
+tasks.register<Exec>("jpackageApp") {
+    description = "Package sql-notebook as a native installer (requires JDK 14+, run on target OS)"
+    group = "distribution"
+    dependsOn(tasks.named("installDist"))
+
+    val installDir       = layout.buildDirectory.dir("install/sql-notebook-core")
+    val outputDir        = layout.buildDirectory.dir("package")
+    val fileAssociations = file("${projectDir}/src/jpackage/file-associations.properties")
+    val mainJarName      = "sql-notebook-core-${project.version}.jar"
+
+    // Detect the best native package type for the current OS
+    val os   = System.getProperty("os.name").lowercase()
+    val type = when {
+        os.contains("mac")  -> "dmg"
+        os.contains("win")  -> "msi"
+        else                -> "deb"   // Linux default; override with -Pjpackage.type=rpm
+    }
+    val packageType = project.findProperty("jpackage.type")?.toString() ?: type
+
+    doFirst { file(outputDir.get().toString()).mkdirs() }
+
+    commandLine(
+        "jpackage",
+        "--type",              packageType,
+        "--name",              "sql-notebook",
+        "--app-version",       project.version.toString(),
+        "--input",             "${installDir.get()}/lib",
+        "--main-jar",          mainJarName,
+        "--main-class",        "io.sqlnotebook.App",
+        "--dest",              outputDir.get().toString(),
+        "--file-associations", fileAssociations.absolutePath,
+        "--java-options",      "-Xmx512m",
+        "--description",       "Interactive SQL notebook with multi-database support",
+        "--vendor",            "sql-notebook",
+    )
+}
+
 // dev run task — skips frontend build
 tasks.register<JavaExec>("runDev") {
     val appVersion = project.version.toString()

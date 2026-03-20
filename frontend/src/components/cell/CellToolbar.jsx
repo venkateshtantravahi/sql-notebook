@@ -1,13 +1,13 @@
 import { MdPlayArrow, MdClose, MdDownload } from 'react-icons/md'
-import { LuPin, LuPinOff } from 'react-icons/lu'
+import { LuPin, LuPinOff, LuCheck, LuZap } from 'react-icons/lu'
 import { CgSpinner } from 'react-icons/cg'
 import { useState, useRef, useEffect } from 'react'
 import useZoomStore from '../../store/useZoomStore.js'
 import { exportCSV, exportJSON } from '../../utils/exportUtils.js'
 
 /**
- * Detects whether the SQL references ≥2 registered namespaces using `word.` prefix
- * matching. When true, the toolbar shows a "⚡ Federated" badge instead of the
+ * Detects whether the SQL references >=2 registered namespaces using `word.` prefix
+ * matching. When true, the toolbar shows a "Federated" badge instead of the
  * namespace dropdown and allows the query to run without a selected namespace.
  */
 function detectFederatedNamespaces(sql, registeredNamespaces) {
@@ -21,7 +21,7 @@ function detectFederatedNamespaces(sql, registeredNamespaces) {
     return found
 }
 
-function PinForm({ results, onPinned }) {
+function PinForm({ results, onPinned, cellId }) {
     const [open, setOpen] = useState(false)
     const [name, setName] = useState('')
     const [status, setStatus] = useState(null) // null | 'pinning' | 'done' | 'error'
@@ -89,10 +89,15 @@ function PinForm({ results, onPinned }) {
         )
     }
 
+    const inputId = `pin-name-${cellId}`
+
     return (
         <form onSubmit={handlePin} className="flex items-center gap-1">
             <input
                 ref={inputRef}
+                id={inputId}
+                name="pin-dataset-name"
+                aria-label="Dataset name for pinned query"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
@@ -121,7 +126,7 @@ function PinForm({ results, onPinned }) {
                 {status === 'pinning' ? (
                     <CgSpinner className="animate-spin" />
                 ) : status === 'done' ? (
-                    '✓'
+                    <LuCheck size={12} />
                 ) : (
                     <LuPin size={11} />
                 )}
@@ -155,7 +160,7 @@ function CellToolbar({ cell, namespaces = [], onRun, onDelete, onNamespaceChange
     const isRunning = cell.status === 'running'
     const hasResults = cell.status === 'done' && cell.results
 
-    const federatedNs = detectFederatedNamespaces(cell.query, namespaces)
+    const federatedNs = detectFederatedNamespaces(cell.source, namespaces)
     const isFederated = federatedNs.size >= 2
 
     // While the fetch is pending, the cell's saved namespace may not be in the list yet.
@@ -176,7 +181,7 @@ function CellToolbar({ cell, namespaces = [], onRun, onDelete, onNamespaceChange
         rounded-t-lg
       "
         >
-            {/* Left — federated badge or namespace dropdown */}
+            {/* Left  -  federated badge or namespace dropdown */}
             {isFederated ? (
                 <div className="flex items-center gap-1.5">
                     <span
@@ -188,10 +193,10 @@ function CellToolbar({ cell, namespaces = [], onRun, onDelete, onNamespaceChange
             "
                         title={`Federated across: ${[...federatedNs].join(', ')}`}
                     >
-                        ⚡ Federated
+                        <LuZap size={11} className="inline mr-0.5" /> Federated
                     </span>
                     <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">
-                        {[...federatedNs].join(' × ')}
+                        {[...federatedNs].join(' x ')}
                     </span>
                 </div>
             ) : (
@@ -211,7 +216,7 @@ function CellToolbar({ cell, namespaces = [], onRun, onDelete, onNamespaceChange
                 >
                     <option value="" disabled>
                         {visibleNamespaces.length === 0
-                            ? 'No namespaces — click ⚙ Config'
+                            ? 'No namespaces -- click Config'
                             : 'Select namespace'}
                     </option>
                     {visibleNamespaces.map((ns) => (
@@ -222,7 +227,7 @@ function CellToolbar({ cell, namespaces = [], onRun, onDelete, onNamespaceChange
                 </select>
             )}
 
-            {/* Right — export + pin + run + delete */}
+            {/* Right  -  export + pin + run + delete */}
             <div className="flex items-center gap-2">
                 {hasResults && (
                     <div className="flex items-center gap-1 mr-1">
@@ -255,7 +260,7 @@ function CellToolbar({ cell, namespaces = [], onRun, onDelete, onNamespaceChange
                         {isFederated && (
                             <>
                                 <div className="w-px h-4 bg-gray-200 dark:bg-gray-600 mx-0.5" />
-                                <PinForm results={cell.results} />
+                                <PinForm results={cell.results} cellId={cell.id} />
                             </>
                         )}
                     </div>

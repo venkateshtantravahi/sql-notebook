@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { SqlNotebookLogo } from './SqlNotebookLogo'
 
-// SplashScreen — loading screen shown while the app initialises.
+// SplashScreen  -  loading screen shown while the app initialises.
 // Fades out once `ready` is true, then calls `onDone` to signal unmount.
-// Animation: logo drop-in (200ms) → wordmark fade (400ms) → progress bar (600ms) → exit.
+// Animation: logo drop-in (200ms) -> wordmark fade (400ms) -> progress bar (600ms) -> exit.
 function SplashScreen({ ready, onDone }) {
     const [logoVisible, setLogoVisible] = useState(false)
     const [wordVisible, setWordVisible] = useState(false)
@@ -21,7 +21,7 @@ function SplashScreen({ ready, onDone }) {
         return () => [t1, t2, t3, t4, t5, t6].forEach(clearTimeout)
     }, [])
 
-    // Exit when ready — onDone is an inline callback, adding it to deps would cause re-runs
+    // Exit when ready  -  onDone is an inline callback, adding it to deps would cause re-runs
     useEffect(() => {
         if (!ready) return
         // Snap bar to 100% then fade out
@@ -58,7 +58,7 @@ function SplashScreen({ ready, onDone }) {
                     marginBottom: 16,
                 }}
             >
-                {/* Logo mark — full detailed logo for splash */}
+                {/* Logo mark  -  full detailed logo for splash */}
                 <div
                     style={{
                         width: 120,
@@ -107,7 +107,7 @@ function SplashScreen({ ready, onDone }) {
                         letterSpacing: '0.04em',
                     }}
                 >
-                    Loading workspace…
+                    Loading workspace...
                 </div>
             </div>
 

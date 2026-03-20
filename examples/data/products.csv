@@ -1,0 +1,10 @@
+id,name,category,price,stock,supplier,launch_date,discontinued
+1,Pro Laptop X1,Electronics,1299.99,145,TechCorp,2022-09-01,false
+2,Office Chair Deluxe,Furniture,349.00,78,FurniturePlus,2021-03-15,false
+3,Wireless Headset Z,Electronics,189.99,312,SoundWave,2023-01-20,false
+4,Standing Desk Pro,Furniture,799.00,42,FurniturePlus,2022-11-10,false
+5,4K Webcam Ultra,Electronics,149.99,201,TechCorp,2023-06-05,false
+6,Ergonomic Keyboard,Electronics,129.99,387,InputPro,2021-08-22,false
+7,Conference Speakerphone,Electronics,279.99,93,SoundWave,2022-04-30,false
+8,Monitor Arm Flex,Hardware,89.99,256,DeskTech,2021-12-14,false
+9,Portable SSD 2TB,Storage,219.99,178,DataStore,2023-03-18,false

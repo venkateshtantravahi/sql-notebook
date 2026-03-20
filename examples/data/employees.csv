@@ -1,0 +1,51 @@
+id,name,department,salary,hire_date,manager_id,city,country
+1,Alice Johnson,Engineering,95000,2019-03-15,NULL,San Francisco,USA
+2,Bob Smith,Engineering,88000,2020-07-01,1,San Francisco,USA
+3,Carol White,Engineering,92000,2018-11-20,1,Austin,USA
+4,David Brown,Engineering,78000,2021-04-10,1,Austin,USA
+5,Eve Davis,Marketing,72000,2019-09-05,NULL,New York,USA
+6,Frank Miller,Marketing,68000,2020-01-15,5,New York,USA
+7,Grace Wilson,Marketing,75000,2018-06-30,5,Chicago,USA
+8,Henry Moore,Sales,65000,2021-08-22,NULL,Chicago,USA
+9,Isla Taylor,Sales,61000,2022-02-14,8,Dallas,USA
+10,Jack Anderson,Sales,63000,2021-11-03,8,Dallas,USA
+11,Karen Thomas,Finance,85000,2017-05-18,NULL,New York,USA
+12,Liam Jackson,Finance,81000,2019-12-01,11,New York,USA
+13,Mia Harris,Finance,77000,2020-08-15,11,Boston,USA
+14,Noah Martinez,HR,70000,2018-03-22,NULL,San Francisco,USA
+15,Olivia Garcia,HR,66000,2020-10-10,14,San Francisco,USA
+16,Peter Robinson,HR,64000,2021-06-05,14,Seattle,USA
+17,Quinn Clark,Engineering,91000,2018-09-14,1,Seattle,USA
+18,Rachel Lewis,Engineering,86000,2019-04-25,1,Portland,USA
+19,Sam Walker,Marketing,69000,2020-03-18,5,Los Angeles,USA
+20,Tina Hall,Marketing,71000,2019-07-30,5,Los Angeles,USA
+21,Uma Allen,Sales,60000,2022-05-12,8,Phoenix,USA
+22,Victor Young,Sales,62000,2021-10-28,8,Phoenix,USA
+23,Wendy Hernandez,Engineering,89000,2019-02-07,1,Denver,USA
+24,Xavier King,Engineering,84000,2020-06-19,1,Denver,USA
+25,Yara Wright,Finance,79000,2019-11-05,11,Atlanta,USA
+26,Zane Scott,Finance,76000,2020-09-22,11,Atlanta,USA
+27,Amy Green,HR,65000,2021-01-14,14,Miami,USA
+28,Brian Adams,Engineering,93000,2017-08-09,1,San Francisco,USA
+29,Claire Baker,Marketing,73000,2019-05-28,5,New York,USA
+30,Derek Carter,Sales,64000,2021-03-17,8,Chicago,USA
+31,Emily Turner,Engineering,87000,2020-02-11,1,Austin,USA
+32,Fiona Phillips,Finance,82000,2019-01-23,11,New York,USA
+33,George Campbell,HR,67000,2020-11-30,14,San Francisco,USA
+34,Hannah Evans,Engineering,90000,2018-07-16,1,Seattle,USA
+35,Ian Edwards,Marketing,70000,2019-10-04,5,Los Angeles,USA
+36,Julia Collins,Sales,61000,2022-04-20,8,Dallas,USA
+37,Kevin Stewart,Engineering,85000,2019-03-08,1,Austin,USA
+38,Laura Sanchez,Finance,80000,2020-05-14,11,Boston,USA
+39,Mike Morris,HR,63000,2021-09-27,14,Seattle,USA
+40,Nina Rogers,Engineering,88000,2018-12-03,1,Denver,USA
+41,Oscar Reed,Marketing,68000,2020-04-09,5,Chicago,USA
+42,Penny Cook,Sales,62000,2021-07-15,8,Phoenix,USA
+43,Ray Morgan,Finance,78000,2020-01-08,11,Atlanta,USA
+44,Sara Bell,Engineering,92000,2017-10-21,1,San Francisco,USA
+45,Tom Murphy,HR,66000,2021-02-28,14,Miami,USA
+46,Uma Bailey,Marketing,72000,2019-08-17,5,New York,USA
+47,Vera Rivera,Sales,63000,2021-12-06,8,Dallas,USA
+48,Will Cooper,Engineering,86000,2020-07-23,1,Austin,USA
+49,Xena Richardson,Finance,81000,2019-06-11,11,New York,USA
+50,Yolanda Cox,Engineering,94000,2018-04-30,1,San Francisco,USA

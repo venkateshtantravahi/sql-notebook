@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import { getFileHandle, setFileHandle, clearFileHandle } from '../../lib/fileHandleStore.js'
+import { flushAutosave } from '../../lib/autosave.js'
 import useThemeStore from '../../store/useThemeStore.js'
 import useConfigModalStore from '../../store/useConfigModalStore.js'
 import useSidebarStore from '../../store/useSidebarStore.js'
@@ -9,23 +11,26 @@ import { useQuerySocket } from '../../hooks/useQuerySocket.js'
 import { SqlNotebookMark } from '../common/SqlNotebookLogo.jsx'
 import KeyboardShortcutsModal from '../modal/KeyboardShortcutsModal.jsx'
 import AboutModal from '../modal/AboutModal.jsx'
+import NotebookInfoModal from '../modal/NotebookInfoModal.jsx'
 import { GoGear } from 'react-icons/go'
 import { HiOutlinePencilSquare } from 'react-icons/hi2'
 import FileSourceModal from '../modal/FileSourceModal.jsx'
 import useFileSourceModalStore from '../../store/useFileSourceModalStore.js'
 import { MdDarkMode, MdLightMode, MdChevronRight } from 'react-icons/md'
+import { LuInfo } from 'react-icons/lu'
 
 // menu definitions
 
 function buildMenus(actions) {
     return {
         File: [
-            { label: 'New Notebook', shortcut: '⌘N', action: actions.newNotebook },
-            { label: 'Open Notebook...', shortcut: '⌘O', action: actions.openNotebook },
+            { label: 'New Notebook', shortcut: 'Cmd N', action: actions.newNotebook },
+            { label: 'Open Notebook...', shortcut: 'Cmd O', action: actions.openNotebook },
             { divider: true },
-            { label: 'Save', shortcut: '⌘S', action: actions.save },
-            { label: 'Save As...', shortcut: '⌘⇧S', action: actions.saveAs },
+            { label: 'Save', shortcut: 'Cmd S', action: actions.save },
+            { label: 'Save As...', shortcut: 'Cmd Shift S', action: actions.saveAs },
             { label: 'Rename', action: actions.rename },
+            { label: 'Close Notebook', shortcut: 'Cmd W', action: actions.closeNotebook },
             { divider: true },
             {
                 label: 'Export Notebook As...',
@@ -39,16 +44,16 @@ function buildMenus(actions) {
             { label: 'Add Data Source...', action: actions.addDataSource },
         ],
         View: [
-            { label: 'Toggle Sidebar', shortcut: '⌘B', action: actions.toggleSidebar },
-            { label: 'Toggle Theme', shortcut: '⌘⇧T', action: actions.toggleTheme },
+            { label: 'Toggle Sidebar', shortcut: 'Cmd B', action: actions.toggleSidebar },
+            { label: 'Toggle Theme', shortcut: 'Cmd Shift T', action: actions.toggleTheme },
             { divider: true },
-            { label: 'Zoom In', shortcut: '⌘+', action: actions.zoomIn },
-            { label: 'Zoom Out', shortcut: '⌘−', action: actions.zoomOut },
-            { label: 'Reset Zoom', shortcut: '⌘0', action: actions.resetZoom },
+            { label: 'Zoom In', shortcut: 'Cmd +', action: actions.zoomIn },
+            { label: 'Zoom Out', shortcut: 'Cmd -', action: actions.zoomOut },
+            { label: 'Reset Zoom', shortcut: 'Cmd 0', action: actions.resetZoom },
         ],
         Help: [
             { label: 'Documentation', action: actions.docs },
-            { label: 'Keyboard Shortcuts', shortcut: '⌘/', action: actions.shortcuts },
+            { label: 'Keyboard Shortcuts', shortcut: 'Cmd /', action: actions.shortcuts },
             { divider: true },
             { label: 'About sql-notebook', action: actions.about },
         ],
@@ -194,18 +199,31 @@ function Dropdown({ label, items, open, onToggle, onClose }) {
 function NotebookTitle({ editTriggerRef }) {
     const { title, isDirty, setTitle } = useNotebookStore()
     const [editing, setEditing] = useState(false)
-    const [draft, setDraft] = useState(title)
+    const [draft, setDraft] = useState('')
     const inputRef = useRef(null)
+
+    // Always seed draft from the live title when entering edit mode
+    function startEditing() {
+        setDraft(useNotebookStore.getState().title)
+        setEditing(true)
+    }
 
     useEffect(() => {
         if (editTriggerRef) {
-            editTriggerRef.current = () => setEditing(true)
+            editTriggerRef.current = startEditing
         }
     }, [editTriggerRef])
 
+    // Auto-select all text when the input appears
+    useEffect(() => {
+        if (editing && inputRef.current) {
+            inputRef.current.select()
+        }
+    }, [editing])
+
     function commit() {
         const trimmed = draft.trim()
-        if (trimmed && trimmed !== title) {
+        if (trimmed && trimmed !== useNotebookStore.getState().title) {
             setTitle(trimmed)
         }
         setEditing(false)
@@ -220,6 +238,9 @@ function NotebookTitle({ editTriggerRef }) {
         return (
             <input
                 ref={inputRef}
+                id="notebook-title"
+                name="notebook-title"
+                aria-label="Notebook title"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={commit}
@@ -228,7 +249,7 @@ function NotebookTitle({ editTriggerRef }) {
           text-sm font-medium text-center
           bg-transparent border-b border-blue-500
           text-gray-800 dark:text-gray-100
-          focus:outline-none w-48
+          focus:outline-none w-56
         "
             />
         )
@@ -236,7 +257,7 @@ function NotebookTitle({ editTriggerRef }) {
 
     return (
         <button
-            onClick={() => setEditing(true)}
+            onClick={startEditing}
             className="
         flex items-center gap-1.5 group
         text-sm font-medium
@@ -274,7 +295,7 @@ function Header() {
     const { open: openFileSource } = useFileSourceModalStore()
     const { toggle: toggleSidebar } = useSidebarStore()
     const { zoomIn, zoomOut, reset: resetZoom } = useZoomStore()
-    const { markSaved, newNotebook: newNb, setTitle } = useNotebookStore()
+    const { markSaved, newNotebook: newNb, setWorkspaceFile } = useNotebookStore()
     const { getSnapshot, loadSnapshot, clearCells } = useCellStore()
     const runQuery = useQuerySocket()
     const titleEditRef = useRef(null)
@@ -282,6 +303,7 @@ function Header() {
     const [openMenu, setOpenMenu] = useState(null)
     const [showShortcuts, setShowShortcuts] = useState(false)
     const [showAbout, setShowAbout] = useState(false)
+    const [showNotebookInfo, setShowNotebookInfo] = useState(false)
 
     // global keyboard shortcuts
     useEffect(() => {
@@ -317,6 +339,10 @@ function Header() {
                 e.preventDefault()
                 handleNew()
             }
+            if (e.key === 'w') {
+                e.preventDefault()
+                handleClose()
+            }
             if (e.key === 'Enter' && e.shiftKey) {
                 e.preventDefault()
                 handleRunAll()
@@ -328,44 +354,42 @@ function Header() {
 
     // .sqlnb file format helpers
 
-    async function writeSqlnbFile(fileHandle, data) {
-        const writable = await fileHandle.createWritable()
+    async function writeSqlnbFile(handle, data) {
+        const writable = await handle.createWritable()
         await writable.write(JSON.stringify(data, null, 2))
         await writable.close()
     }
 
-    function buildSqlnb(title, cellSnapshots) {
-        return {
-            version: '1',
-            title,
-            savedAt: new Date().toISOString(),
-            cells: cellSnapshots,
-        }
-    }
-
     // actions
-
-    const fileHandleRef = useRef(null)
 
     async function handleSave() {
         const snapshots = getSnapshot()
-        const { title } = useNotebookStore.getState()
-        const data = buildSqlnb(title, snapshots)
+        const { workspaceFile, title } = useNotebookStore.getState()
+        const data = useNotebookStore.getState().buildNotebook(snapshots)
 
+        // Workspace save  -  file was opened via the sidebar file browser
+        if (workspaceFile) {
+            await useNotebookStore.getState().saveWorkspace(snapshots)
+            return
+        }
+
+        // File System Access API save
         try {
-            if (!fileHandleRef.current) {
-                // First save — show save dialog
-                fileHandleRef.current = await window.showSaveFilePicker({
-                    suggestedName: `${title.replace(/\s+/g, '-')}.sqlnb`,
-                    types: [
-                        {
-                            description: 'SQL Notebook',
-                            accept: { 'application/x-sqlnotebook': ['.sqlnb'] },
-                        },
-                    ],
-                })
+            if (!getFileHandle()) {
+                // First save  -  show save dialog
+                setFileHandle(
+                    await window.showSaveFilePicker({
+                        suggestedName: `${title.replace(/\s+/g, '-')}.sqlnb`,
+                        types: [
+                            {
+                                description: 'SQL Notebook',
+                                accept: { 'application/x-sqlnotebook': ['.sqlnb'] },
+                            },
+                        ],
+                    })
+                )
             }
-            await writeSqlnbFile(fileHandleRef.current, data)
+            await writeSqlnbFile(getFileHandle(), data)
             markSaved()
         } catch (err) {
             if (err.name !== 'AbortError') console.error('Save failed', err)
@@ -374,12 +398,11 @@ function Header() {
 
     async function handleSaveAs() {
         const snapshots = getSnapshot()
-        const { title } = useNotebookStore.getState()
-        const data = buildSqlnb(title, snapshots)
+        const data = useNotebookStore.getState().buildNotebook(snapshots)
 
         try {
             const handle = await window.showSaveFilePicker({
-                suggestedName: `${title.replace(/\s+/g, '-')}.sqlnb`,
+                suggestedName: `${useNotebookStore.getState().title.replace(/\s+/g, '-')}.sqlnb`,
                 types: [
                     {
                         description: 'SQL Notebook',
@@ -387,7 +410,7 @@ function Header() {
                     },
                 ],
             })
-            fileHandleRef.current = handle
+            setFileHandle(handle)
             await writeSqlnbFile(handle, data)
             markSaved()
         } catch (err) {
@@ -397,8 +420,8 @@ function Header() {
 
     function handleRunAll() {
         useCellStore.getState().cells.forEach((cell) => {
-            if (cell.type !== 'markdown' && cell.namespace && cell.query.trim()) {
-                runQuery(cell.id, cell.namespace, cell.query.trim())
+            if (cell.type !== 'markdown' && cell.namespace && cell.source.trim()) {
+                runQuery(cell.id, cell.namespace, cell.source.trim())
             }
         })
     }
@@ -407,8 +430,14 @@ function Header() {
         if (window.confirm('Start a new notebook? Unsaved changes will be lost.')) {
             clearCells()
             newNb([])
-            fileHandleRef.current = null
+            clearFileHandle()
         }
+    }
+
+    function handleClose() {
+        clearFileHandle()
+        clearCells()
+        newNb()
     }
 
     async function handleOpen() {
@@ -425,11 +454,13 @@ function Header() {
             const text = await file.text()
             const data = JSON.parse(text)
 
-            if (window.confirm(`Load "${data.title}"? Current cells will be replaced.`)) {
-                fileHandleRef.current = handle
-                setTitle(data.title)
-                loadSnapshot(data.cells ?? [])
-            }
+            // Save current notebook to disk before replacing it
+            await flushAutosave()
+
+            setFileHandle(handle)
+            setWorkspaceFile(null)
+            useNotebookStore.getState().restoreMetadata(data)
+            loadSnapshot(data.cells ?? [])
         } catch (err) {
             if (err.name !== 'AbortError') console.error('Open failed', err)
         }
@@ -456,9 +487,9 @@ function Header() {
             .map((c) => {
                 if (c.type === 'markdown') {
                     // Wrap raw markdown in a preformatted block for portability
-                    return `<div class="cell markdown-cell"><pre class="md-source">${escHtml(c.content)}</pre></div>`
+                    return `<div class="cell markdown-cell"><pre class="md-source">${escHtml(c.source ?? '')}</pre></div>`
                 }
-                return `<div class="cell sql-cell"><pre><code>${escHtml(c.query)}</code></pre></div>`
+                return `<div class="cell sql-cell"><pre><code>${escHtml(c.source ?? '')}</code></pre></div>`
             })
             .join('\n')
 
@@ -492,9 +523,9 @@ ${cellsHtml}
         const parts = [`# ${title}`, '']
         cells.forEach((c) => {
             if (c.type === 'markdown') {
-                parts.push(c.content, '')
+                parts.push(c.source ?? '', '')
             } else {
-                parts.push('```sql', c.query, '```', '')
+                parts.push('```sql', c.source ?? '', '```', '')
             }
         })
         downloadBlob(`${slug(title)}.md`, parts.join('\n'))
@@ -506,10 +537,10 @@ ${cellsHtml}
         const lines = [`-- Notebook: ${title}`, `-- Exported: ${new Date().toISOString()}`, '']
         cells.forEach((c) => {
             if (c.type === 'markdown') {
-                c.content.split('\n').forEach((line) => lines.push(`-- ${line}`))
+                ;(c.source ?? '').split('\n').forEach((line) => lines.push(`-- ${line}`))
                 lines.push('')
             } else {
-                const q = c.query.trimEnd()
+                const q = (c.source ?? '').trimEnd()
                 lines.push(q.endsWith(';') ? q : q + ';', '')
             }
         })
@@ -532,6 +563,7 @@ ${cellsHtml}
         save: handleSave,
         saveAs: handleSaveAs,
         rename: () => titleEditRef.current?.(),
+        closeNotebook: handleClose,
         exportHTML: handleExportHTML,
         exportMarkdown: handleExportMarkdown,
         exportSQL: handleExportSQL,
@@ -560,7 +592,7 @@ ${cellsHtml}
         border-b border-gray-200 dark:border-gray-800
       "
             >
-                {/* Left — logo + app name */}
+                {/* Left  -  logo + app name */}
                 <div className="flex items-center gap-2 w-40">
                     <SqlNotebookMark size={28} dark={theme === 'dark'} />
                     <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 tracking-wide whitespace-nowrap">
@@ -568,9 +600,21 @@ ${cellsHtml}
                     </span>
                 </div>
 
-                {/* Center — notebook title inline with menus */}
+                {/* Center  -  notebook title inline with menus */}
                 <div className="flex items-center gap-1">
                     <NotebookTitle editTriggerRef={titleEditRef} />
+                    <button
+                        onClick={() => setShowNotebookInfo(true)}
+                        title="Notebook info - edit description, tags, and default namespace"
+                        className="
+                            p-1 rounded transition-colors
+                            text-gray-300 dark:text-gray-600
+                            hover:text-gray-500 dark:hover:text-gray-400
+                            hover:bg-gray-100 dark:hover:bg-gray-800
+                        "
+                    >
+                        <LuInfo size={13} />
+                    </button>
                     <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
                     {Object.entries(MENUS).map(([label, items]) => (
                         <Dropdown
@@ -584,7 +628,7 @@ ${cellsHtml}
                     ))}
                 </div>
 
-                {/* Right — theme toggle + config */}
+                {/* Right  -  theme toggle + config */}
                 <div className="flex items-center gap-2 w-50 justify-end">
                     <button
                         onClick={toggleTheme}
@@ -630,6 +674,10 @@ ${cellsHtml}
                 onClose={() => setShowShortcuts(false)}
             />
             <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />
+            <NotebookInfoModal
+                isOpen={showNotebookInfo}
+                onClose={() => setShowNotebookInfo(false)}
+            />
             <FileSourceModal />
         </>
     )

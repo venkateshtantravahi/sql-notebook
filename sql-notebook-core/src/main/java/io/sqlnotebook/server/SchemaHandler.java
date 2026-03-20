@@ -40,7 +40,7 @@ public class SchemaHandler extends HttpServlet {
     }
 
     /**
-     * GET /schema/{namespace} — returns all tables and columns for the given namespace.
+     * GET /schema/{namespace}  -  returns all tables and columns for the given namespace.
      * Dispatches to the appropriate schema fetcher based on the detected database type.
      * Returns 400 if no namespace is provided, 404 if unknown or ephemeral.
      */
@@ -51,7 +51,7 @@ public class SchemaHandler extends HttpServlet {
         String path = req.getPathInfo();
         if (path == null || path.equals("/")) {
             resp.setStatus(400);
-            resp.getWriter().write("{\"error\":\"namespace required — use /schema/{namespace}\"}");
+            resp.getWriter().write("{\"error\":\"namespace required  -  use /schema/{namespace}\"}");
             return;
         }
 
@@ -190,7 +190,7 @@ public class SchemaHandler extends HttpServlet {
         }
 
         // collect FKs with references
-        // key = "tableName.columnName" → { referencedTable, referencedColumn }
+        // key = "tableName.columnName" -> { referencedTable, referencedColumn }
         Map<String, FkRef> foreignKeys = new HashMap<>();
         try (PreparedStatement ps = conn.prepareStatement(fkSql)) {
             ps.setString(1, schemaName);
@@ -205,7 +205,7 @@ public class SchemaHandler extends HttpServlet {
             }
         }
 
-        // build table → columns map
+        // build table -> columns map
         Map<String, List<Map<String, Object>>> tableMap = new LinkedHashMap<>();
         try (PreparedStatement ps = conn.prepareStatement(columnSql)) {
             ps.setString(1, schemaName);
@@ -252,7 +252,7 @@ public class SchemaHandler extends HttpServlet {
             // "from" = local column, "table" = referenced table, "to" = referenced column
             Map<String, FkRef> fkMap = new HashMap<>();
             try (PreparedStatement ps = conn.prepareStatement(
-                    "PRAGMA foreign_key_list(\"" + table + "\")")) {
+                    "PRAGMA foreign_key_list(\"" + table.replace("\"", "\"\"") + "\")")) {
                 try (ResultSet rs = ps.executeQuery()) {
                     while (rs.next()) {
                         fkMap.put(
@@ -265,7 +265,7 @@ public class SchemaHandler extends HttpServlet {
 
             List<Map<String, Object>> columns = new ArrayList<>();
             try (PreparedStatement ps = conn.prepareStatement(
-                    "PRAGMA table_info(\"" + table + "\")")) {
+                    "PRAGMA table_info(\"" + table.replace("\"", "\"\"") + "\")")) {
                 try (ResultSet rs = ps.executeQuery()) {
                     while (rs.next()) {
                         String  colName = rs.getString("name");
@@ -375,7 +375,7 @@ public class SchemaHandler extends HttpServlet {
         return buildTableList(tableMap);
     }
 
-    // DuckDB — uses INFORMATION_SCHEMA but with 'main' schema and no FK support
+    // DuckDB  -  uses INFORMATION_SCHEMA but with 'main' schema and no FK support
 
     private List<Map<String, Object>> fetchDuckDbSchema(Connection conn) throws Exception {
         // DuckDB always uses 'main' as the default schema for file-based namespaces

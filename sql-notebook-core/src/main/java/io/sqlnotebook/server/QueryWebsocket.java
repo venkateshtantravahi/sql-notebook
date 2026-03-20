@@ -14,11 +14,11 @@ import java.util.concurrent.Future;
  * WebSocket endpoint for handling real-time database queries.
  *
  * Routing:
- *   - {@code namespace} non-null/non-blank → single-namespace path via {@link QueryExecutor}
- *   - {@code namespace} null/blank         → federated path via {@link FederatedQueryExecutor};
- *     the executor scans the SQL for registered namespace prefixes and requires ≥ 2.
+ *   - {@code namespace} non-null/non-blank -> single-namespace path via {@link QueryExecutor}
+ *   - {@code namespace} null/blank         -> federated path via {@link FederatedQueryExecutor};
+ *     the executor scans the SQL for registered namespace prefixes and requires >= 2.
  *
- * Protocol — send:    {@code { cellId, namespace?, sql }}
+ * Protocol  -  send:    {@code { cellId, namespace?, sql }}
  *           receive:  {@code { cellId, status: 'running' | 'done' | 'error', result?, error? }}
  */
 @ServerEndpoint("/ws/query")
@@ -111,7 +111,7 @@ public class QueryWebsocket {
             String json = mapper.writeValueAsString(response);
             session.getBasicRemote().sendText(json);
         } catch (IOException e) {
-            // Session may have closed between the isOpen check and sendText — ignore
+            // Session may have closed between the isOpen check and sendText  -  ignore
         }
     }
 }

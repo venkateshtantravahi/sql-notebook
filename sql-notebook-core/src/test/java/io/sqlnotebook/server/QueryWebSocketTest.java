@@ -52,7 +52,7 @@ class QueryWebSocketTest {
         FileSourceRegistry sourceRegistry = new FileSourceRegistry(registrar);
         executor   = new QueryExecutor(registry);
         PinnedViewRegistry pinnedRegistry = new PinnedViewRegistry(registry, tempDir.resolve("pinned").toString());
-        httpServer = new HttpServer(0, registry, executor, sourceRegistry, registrar, pinnedRegistry, 0);
+        httpServer = new HttpServer(0, registry, executor, sourceRegistry, registrar, pinnedRegistry, 0, System.getProperty("user.dir"));
         httpServer.start();
     }
 

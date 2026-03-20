@@ -16,9 +16,9 @@ public final class FileUtils {
      *
      * <p>Examples:
      * <pre>
-     *   extension("sales.csv")        → "csv"
-     *   extension("report.2024.xlsx") → "xlsx"
-     *   extension("README")           → ""
+     *   extension("sales.csv")        -> "csv"
+     *   extension("report.2024.xlsx") -> "xlsx"
+     *   extension("README")           -> ""
      * </pre>
      *
      * @param filename the filename to inspect (not a full path)

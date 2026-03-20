@@ -4,7 +4,7 @@ import useCellStore from '../../store/useCellStore.js'
 import SqlCell from '../cell/SqlCell.jsx'
 import MarkdownCell from '../cell/MarkdownCell.jsx'
 
-// Hover zone at the bottom of each cell — reveals "+ SQL" and "+ Markdown" insert buttons
+// Hover zone at the bottom of each cell  -  reveals "+ SQL" and "+ Markdown" insert buttons
 function InsertBar({ afterId }) {
     const { insertAfter } = useCellStore()
     const [visible, setVisible] = useState(false)
@@ -55,7 +55,7 @@ function InsertBar({ afterId }) {
     )
 }
 
-// Wraps a cell with move ↑↓ buttons visible on hover
+// Wraps a cell with move up/down buttons visible on hover
 function CellWrapper({ cell, isFirst, isLast, children }) {
     const { moveUp, moveDown } = useCellStore()
     const [hovered, setHovered] = useState(false)
@@ -66,7 +66,7 @@ function CellWrapper({ cell, isFirst, isLast, children }) {
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => setHovered(false)}
         >
-            {/* Move buttons — float to the left of the cell */}
+            {/* Move buttons  -  float to the left of the cell */}
             <div
                 className={`
                     absolute -left-8 top-1/2 -translate-y-1/2

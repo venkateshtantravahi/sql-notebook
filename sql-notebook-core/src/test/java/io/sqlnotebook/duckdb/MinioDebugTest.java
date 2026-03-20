@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Integration tests for the MinIO / S3 → DuckDB registration path.
+ * Integration tests for the MinIO / S3 -> DuckDB registration path.
  *
  * Verifies three connection layers in isolation:
  *   1. Raw DriverManager with S3 JDBC properties (mirrors initialiseRemote)
@@ -50,7 +50,7 @@ class MinioDebugTest {
     static void setup() {
         jdbcUrl = "jdbc:duckdb:" + tempDir.resolve("minio_debug.db");
         assumeTrue(isMinioReachable(),
-                "MinIO not reachable at " + TEST_ENDPOINT + " — skipping S3 integration tests");
+                "MinIO not reachable at " + TEST_ENDPOINT + "  -  skipping S3 integration tests");
     }
 
     /**
@@ -167,7 +167,7 @@ class MinioDebugTest {
             try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM \"" + namespace + "\"")) {
                 assertTrue(rs.next());
                 assertTrue(rs.getLong(1) > 0,
-                        "Namespace registered but query returned 0 rows — S3 credentials may not be reaching the pool");
+                        "Namespace registered but query returned 0 rows  -  S3 credentials may not be reaching the pool");
             }
         } finally {
             registry.shutdown();

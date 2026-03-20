@@ -4,7 +4,7 @@ const RAIL_WIDTH = 40
 const DEFAULT_PANEL_WIDTH = 288
 
 const useSidebarStore = create((set, get) => ({
-    activePanel: 'connections', // 'connections' | 'schema' | 'datasources' | 'pinned' | 'profiler' | null
+    activePanel: 'workspace', // 'workspace' | 'connections' | 'schema' | 'datasources' | 'pinned' | 'profiler' | null
     panelWidth: DEFAULT_PANEL_WIDTH,
     railWidth: RAIL_WIDTH,
     namespaces: [],
@@ -22,7 +22,7 @@ const useSidebarStore = create((set, get) => ({
             activePanel: state.activePanel === id ? null : id,
         })),
 
-    // ⌘B — close panel if open, reopen connections by default
+    // Cmd+B - close panel if open, reopen connections by default
     toggle: () =>
         set((state) => ({
             activePanel: state.activePanel !== null ? null : 'connections',

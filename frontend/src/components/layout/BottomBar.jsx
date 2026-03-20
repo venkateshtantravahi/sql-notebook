@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNamespaceRefresh } from '../../hooks/useNamespaceRefresh.js'
+import { useBackendReady } from '../../hooks/useBackendReady.js'
+import useNotebookStore from '../../store/useNotebookStore.js'
+import { LuCheck, LuLoader } from 'react-icons/lu'
 import pkg from '../../../package.json'
 
 function HealthTooltip({ ns, anchorEl }) {
@@ -82,14 +85,48 @@ function HealthDot({ ns }) {
                 )}
             </span>
 
-            {/* Tooltip rendered at fixed position — z-9999 clears sidebar and header */}
+            {/* Tooltip rendered at fixed position - z-9999 clears sidebar and header */}
             {hovered && <HealthTooltip ns={nsObj} anchorEl={ref.current} />}
         </div>
     )
 }
 
+function AutosaveIndicator() {
+    const savedAt = useNotebookStore((s) => s.savedAt)
+    const isSaving = useNotebookStore((s) => s.isSaving)
+    const [showSaved, setShowSaved] = useState(false)
+    const prevSavedAt = useRef(null)
+
+    useEffect(() => {
+        if (!savedAt || savedAt === prevSavedAt.current) return
+        prevSavedAt.current = savedAt
+        setShowSaved(true)
+        const t = setTimeout(() => setShowSaved(false), 3000)
+        return () => clearTimeout(t)
+    }, [savedAt])
+
+    if (isSaving) {
+        return (
+            <span className="flex items-center gap-1 text-xs font-mono text-gray-400 dark:text-gray-500 flex-shrink-0">
+                <LuLoader size={10} className="animate-spin" />
+                Saving...
+            </span>
+        )
+    }
+    if (showSaved) {
+        return (
+            <span className="flex items-center gap-1 text-xs font-mono text-emerald-500 dark:text-emerald-400 flex-shrink-0">
+                <LuCheck size={10} />
+                Auto-saved
+            </span>
+        )
+    }
+    return null
+}
+
 function BottomBar() {
     const [namespaces, setNamespaces] = useState([])
+    const backendReady = useBackendReady()
 
     function fetchNs() {
         fetch('/namespaces')
@@ -98,11 +135,14 @@ function BottomBar() {
             .catch(() => setNamespaces([]))
     }
 
+    // Gate on backendReady so this never fires before App.jsx completes its
+    // health-check + settle sequence.
     useEffect(() => {
+        if (!backendReady) return
         fetchNs()
         const interval = setInterval(fetchNs, 30000)
         return () => clearInterval(interval)
-    }, [])
+    }, [backendReady])
 
     useNamespaceRefresh(fetchNs)
 
@@ -130,6 +170,8 @@ function BottomBar() {
                     ))
                 )}
             </div>
+
+            <AutosaveIndicator />
 
             <span className="text-xs font-mono text-gray-300 dark:text-gray-600 flex-shrink-0">
                 v{pkg.version}

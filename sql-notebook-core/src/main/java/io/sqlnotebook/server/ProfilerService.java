@@ -12,11 +12,11 @@ import java.util.List;
  *
  * DuckDB path:
  *   Uses DuckDB's native SUMMARIZE command which returns count, null_percentage,
- *   approx_unique, min, max, mean, and std in a single pass — fast and exact.
- *   Note: DuckDB renamed the average column from 'avg' → 'mean' in v1.1.0.
+ *   approx_unique, min, max, mean, and std in a single pass  -  fast and exact.
+ *   Note: DuckDB renamed the average column from 'avg' -> 'mean' in v1.1.0.
  *   We detect the column name at runtime from ResultSetMetaData.
  *
- * Generic path (MySQL, Postgres, SQLite, …):
+ * Generic path (MySQL, Postgres, SQLite, ...):
  *   Runs one wide aggregation query: COUNT(*), per-column null count,
  *   COUNT(DISTINCT), MIN, and MAX.
  *   Identifier quoting is obtained from DatabaseMetaData.getIdentifierQuoteString()
@@ -104,17 +104,19 @@ public class ProfilerService {
         return profileGeneric(conn, table);
     }
 
-    // DuckDB — native SUMMARIZE
+    // DuckDB  -  native SUMMARIZE
 
     private List<ColumnProfile> profileDuckDb(Connection conn, String table) throws SQLException {
         // Get total row count separately so we can compute null counts per column
-        long total = scalarLong(conn, "SELECT COUNT(*) FROM \"" + table + "\"");
+        // Use id() to double-escape any embedded double-quotes in the table name.
+        String quotedTable = id(table, "\"");
+        long total = scalarLong(conn, "SELECT COUNT(*) FROM " + quotedTable);
 
         List<ColumnProfile> result = new ArrayList<>();
         try (Statement stmt = conn.createStatement();
-             ResultSet rs   = stmt.executeQuery("SUMMARIZE SELECT * FROM \"" + table + "\"")) {
+             ResultSet rs   = stmt.executeQuery("SUMMARIZE SELECT * FROM " + quotedTable)) {
 
-            // DuckDB renamed 'avg' → 'mean' in v1.1.0. Detect at runtime.
+            // DuckDB renamed 'avg' -> 'mean' in v1.1.0. Detect at runtime.
             String avgCol = resolveColumn(rs.getMetaData(), "mean", "avg");
 
             while (rs.next()) {
@@ -140,7 +142,7 @@ public class ProfilerService {
         return result;
     }
 
-    // Generic — one-pass aggregation with positional result access
+    // Generic  -  one-pass aggregation with positional result access
 
     private List<ColumnProfile> profileGeneric(Connection conn, String table) throws SQLException {
         // Use the JDBC-standard identifier quote character for this database.
@@ -162,7 +164,7 @@ public class ProfilerService {
         if (names.isEmpty()) return List.of();
 
         // Step 2: exact total row count via a lightweight COUNT(*).
-        // InnoDB uses the smallest available index — typically finishes in < 2s even for 100M rows.
+        // InnoDB uses the smallest available index  -  typically finishes in < 2s even for 100M rows.
         long total = scalarLong(conn, "SELECT COUNT(*) FROM " + id(table, q));
 
         // Step 3: build aggregation query.
@@ -244,7 +246,7 @@ public class ProfilerService {
     /**
      * Returns the identifier quote character for the given connection.
      * JDBC standard: DatabaseMetaData.getIdentifierQuoteString() returns a space
-     * if identifier quoting is not supported — we fall back to double-quote in that case.
+     * if identifier quoting is not supported  -  we fall back to double-quote in that case.
      */
     private String quoteChar(Connection conn) throws SQLException {
         String q = conn.getMetaData().getIdentifierQuoteString();
@@ -254,7 +256,7 @@ public class ProfilerService {
     /**
      * Wraps an identifier in the given quote character, doubling any embedded
      * occurrences of that character to escape them.
-     * e.g. id("my`col", "`") → "`my``col`"
+     * e.g. id("my`col", "`") -> "`my``col`"
      */
     private String id(String identifier, String q) {
         return q + identifier.replace(q, q + q) + q;
@@ -263,7 +265,7 @@ public class ProfilerService {
     /**
      * Scans ResultSetMetaData for the first matching column name from the
      * provided candidates (case-insensitive). Returns the first candidate by
-     * default if none match — the caller's JDBC driver will then throw a clear
+     * default if none match  -  the caller's JDBC driver will then throw a clear
      * "column not found" error rather than a silent wrong value.
      */
     private String resolveColumn(ResultSetMetaData meta, String... candidates) throws SQLException {

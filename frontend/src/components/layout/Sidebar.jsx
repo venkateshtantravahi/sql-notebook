@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import SchemaExplorer from '../sidebar/SchemaExplorer.jsx'
 import DataProfiler from '../sidebar/DataProfiler.jsx'
+import WorkspacePanel from '../sidebar/WorkspacePanel.jsx'
 import useSidebarStore from '../../store/useSidebarStore.js'
 import useConfigModalStore from '../../store/useConfigModalStore.js'
 import useFileSourceModalStore from '../../store/useFileSourceModalStore.js'
@@ -18,6 +19,7 @@ import {
     LuPin,
     LuPinOff,
     LuChartBar,
+    LuFolderOpen,
 } from 'react-icons/lu'
 import { SiApacheparquet } from 'react-icons/si'
 
@@ -102,7 +104,7 @@ function AddBtn({ onClick, title }) {
 function ConnectionsPanel({ deletingNs, onEdit, onDelete, onAddConnection, pinnedNames }) {
     const { namespaces, selectedNs, setSelectedNs } = useSidebarStore()
 
-    // Pinned datasets live in their own panel — hide them here
+    // Pinned datasets live in their own panel  -  hide them here
     const connections = namespaces.filter((ns) => !pinnedNames.has(ns.name))
 
     return (
@@ -121,7 +123,7 @@ function ConnectionsPanel({ deletingNs, onEdit, onDelete, onAddConnection, pinne
             <div className="flex-1 overflow-y-auto px-2 py-2">
                 {connections.length === 0 ? (
                     <p className="px-1 py-1 text-xs text-gray-400 dark:text-gray-600 italic">
-                        No connections — click + to add one
+                        No connections -- click + to add one
                     </p>
                 ) : (
                     connections.map((ns) => (
@@ -192,7 +194,7 @@ function ConnectionsPanel({ deletingNs, onEdit, onDelete, onAddConnection, pinne
 function SchemaPanel({ pinnedNames }) {
     const { namespaces, selectedNs, setSelectedNs } = useSidebarStore()
 
-    // Pinned datasets are single flat tables — no schema discovery or ERD needed
+    // Pinned datasets are single flat tables  -  no schema discovery or ERD needed
     const schemaNamespaces = namespaces.filter((ns) => !pinnedNames.has(ns.name))
 
     return (
@@ -237,12 +239,12 @@ function SchemaPanel({ pinnedNames }) {
 
 // Data Sources panel
 
-function DataSourcesPanel() {
+function DataSourcesPanel({ backendReady }) {
     const { open: openFileSource } = useFileSourceModalStore()
     const [sources, setSources] = useState([])
     const [deletingNs, setDeletingNs] = useState(null)
 
-    function fetchSources() {
+    const fetchSources = useCallback(() => {
         fetch('/sources')
             .then((r) => (r.ok ? r.json() : { sources: [] }))
             .then((data) => {
@@ -250,17 +252,17 @@ function DataSourcesPanel() {
                 setSources(list)
             })
             .catch(() => setSources([]))
-    }
+    }, [])
 
     useEffect(() => {
+        if (!backendReady) return
         fetchSources()
-    }, [])
+    }, [backendReady, fetchSources])
 
     useEffect(() => {
-        const handler = () => fetchSources()
-        window.addEventListener('namespace-added', handler)
-        return () => window.removeEventListener('namespace-added', handler)
-    }, [])
+        window.addEventListener('namespace-added', fetchSources)
+        return () => window.removeEventListener('namespace-added', fetchSources)
+    }, [fetchSources])
 
     async function handleDelete(namespace, e) {
         e.stopPropagation()
@@ -302,7 +304,7 @@ function DataSourcesPanel() {
             <div className="flex-1 overflow-y-auto px-2 py-2">
                 {sources.length === 0 ? (
                     <p className="px-1 py-1 text-xs text-gray-400 dark:text-gray-600 italic">
-                        No data sources — click + to add one
+                        No data sources -- click + to add one
                     </p>
                 ) : (
                     sources.map((src) => (
@@ -348,25 +350,26 @@ function DataSourcesPanel() {
 
 // Pinned Datasets panel
 
-function PinnedPanel() {
+function PinnedPanel({ backendReady }) {
     const [pinned, setPinned] = useState([])
     const [unpinning, setUnpinning] = useState(null)
 
-    function fetchPinned() {
+    const fetchPinned = useCallback(() => {
         fetch('/pin')
             .then((r) => (r.ok ? r.json() : { pinned: [] }))
             .then((data) => setPinned(data.pinned ?? []))
             .catch(() => setPinned([]))
-    }
+    }, [])
 
     useEffect(() => {
+        if (!backendReady) return
         fetchPinned()
-    }, [])
+    }, [backendReady, fetchPinned])
 
     useEffect(() => {
         window.addEventListener('namespace-added', fetchPinned)
         return () => window.removeEventListener('namespace-added', fetchPinned)
-    }, [])
+    }, [fetchPinned])
 
     async function handleUnpin(ns, e) {
         e.stopPropagation()
@@ -462,6 +465,7 @@ function PinnedPanel() {
 // Rail items
 
 const RAIL_ITEMS = [
+    { id: 'workspace', icon: <LuFolderOpen size={18} />, label: 'Workspace' },
     { id: 'connections', icon: <LuPlugZap size={18} />, label: 'Connections' },
     { id: 'schema', icon: <MdAccountTree size={18} />, label: 'Schema Explorer' },
     { id: 'datasources', icon: <LuDatabase size={18} />, label: 'Data Sources' },
@@ -487,7 +491,7 @@ function Sidebar() {
     const openEdit = configStore.openEdit ?? configStore.open ?? (() => {})
 
     const [deletingNs, setDeletingNs] = useState(null)
-    // Set of pinned namespace names — used to filter them out of connections + schema panels
+    // Set of pinned namespace names  -  used to filter them out of connections + schema panels
     const [pinnedNames, setPinnedNames] = useState(new Set())
 
     const dragging = useRef(false)
@@ -648,6 +652,7 @@ function Sidebar() {
                         style={{ width: panelWidth }}
                         className="flex-1 overflow-hidden flex flex-col"
                     >
+                        {activePanel === 'workspace' && <WorkspacePanel />}
                         {activePanel === 'connections' && (
                             <ConnectionsPanel
                                 deletingNs={deletingNs}
@@ -658,14 +663,16 @@ function Sidebar() {
                             />
                         )}
                         {activePanel === 'schema' && <SchemaPanel pinnedNames={pinnedNames} />}
-                        {activePanel === 'datasources' && <DataSourcesPanel />}
-                        {activePanel === 'pinned' && <PinnedPanel />}
+                        {activePanel === 'datasources' && (
+                            <DataSourcesPanel backendReady={backendReady} />
+                        )}
+                        {activePanel === 'pinned' && <PinnedPanel backendReady={backendReady} />}
                         {activePanel === 'profiler' && <DataProfiler />}
                     </div>
                 )}
             </aside>
 
-            {/* Drag handle — only when panel open */}
+            {/* Drag handle  -  only when panel open */}
             {activePanel !== null && (
                 <div
                     onMouseDown={onMouseDown}

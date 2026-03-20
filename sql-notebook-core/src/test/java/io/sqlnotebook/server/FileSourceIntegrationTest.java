@@ -23,26 +23,26 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * End-to-end integration test covering the full Universal Data Source pipeline:
  *
- *   DuckDbRegistrar → FileSourceRegistry → FileSourceHandler → HttpServer
+ *   DuckDbRegistrar -> FileSourceRegistry -> FileSourceHandler -> HttpServer
  *
  * Uses DuckDB in-process (no Docker / Testcontainers needed).
  * Each test gets a fresh TempDir so there is zero state bleed between tests.
  *
  * What is tested:
  *   1.  Namespace sanitisation (DuckDbRegistrar.sanitise)
- *   2.  CSV file registration — creates DuckDB view, queries return data
- *   3.  JSON file registration — queries return correct rows
- *   4.  Parquet file registration — queries return correct rows
- *   5.  Namespace collision — duplicate filename gets _2 suffix
- *   6.  GET /sources — lists registered sources, no S3 secret in response
- *   7.  POST /sources/upload (CSV) — full HTTP round-trip
- *   8.  POST /sources/upload (JSON) — full HTTP round-trip
- *   9.  POST /sources/upload — unsupported extension → 400
- *   10. POST /sources/upload — missing file field → 400
- *   11. DELETE /sources/:namespace — removes namespace, cleans up file
- *   12. DELETE /sources/:namespace — unknown namespace → 404
- *   13. Rehydration — FileSourceRegistry.rehydrate() restores namespaces
- *   14. ConnectionRegistry.register() duplicate → exception
+ *   2.  CSV file registration  -  creates DuckDB view, queries return data
+ *   3.  JSON file registration  -  queries return correct rows
+ *   4.  Parquet file registration  -  queries return correct rows
+ *   5.  Namespace collision  -  duplicate filename gets _2 suffix
+ *   6.  GET /sources  -  lists registered sources, no S3 secret in response
+ *   7.  POST /sources/upload (CSV)  -  full HTTP round-trip
+ *   8.  POST /sources/upload (JSON)  -  full HTTP round-trip
+ *   9.  POST /sources/upload  -  unsupported extension -> 400
+ *   10. POST /sources/upload  -  missing file field -> 400
+ *   11. DELETE /sources/:namespace  -  removes namespace, cleans up file
+ *   12. DELETE /sources/:namespace  -  unknown namespace -> 404
+ *   13. Rehydration  -  FileSourceRegistry.rehydrate() restores namespaces
+ *   14. ConnectionRegistry.register() duplicate -> exception
  *   15. ConnectionRegistry.isEphemeral() tracking
  *   16. ConnectionRegistry DuckDB JDBC URL builds correctly
  *   17. Full query via /query endpoint against uploaded CSV
@@ -80,7 +80,7 @@ class FileSourceIntegrationTest {
         sourceRegistry = new FileSourceRegistry(registrar, sourcesJson);
         executor = new QueryExecutor(registry);
         PinnedViewRegistry pinnedRegistry = new PinnedViewRegistry(registry, sharedTemp.resolve("pinned").toString());
-        server = new HttpServer(PORT, registry, executor, sourceRegistry, registrar, pinnedRegistry, 0);
+        server = new HttpServer(PORT, registry, executor, sourceRegistry, registrar, pinnedRegistry, 0, System.getProperty("user.dir"));
         server.start();
         client = HttpClient.newHttpClient();
     }
@@ -121,13 +121,13 @@ class FileSourceIntegrationTest {
                 "2,Bob,85000\n");
 
         String namespace = registrar.registerFile("employees.csv");
-        assertEquals("employees_csv", namespace);
+        assertEquals("employees", namespace);
 
         assertTrue(registry.hasNamespace(namespace));
 
         try (var conn = registry.getConnection(namespace);
              var stmt = conn.createStatement();
-             var rs = stmt.executeQuery("select count(*) from employees_csv")) {
+             var rs = stmt.executeQuery("select count(*) from employees")) {
             assertTrue(rs.next());
             assertEquals(2, rs.getInt(1));
         }
@@ -135,10 +135,10 @@ class FileSourceIntegrationTest {
 
     @Test @Order(5)
     void registerFile_csvReturnsCorrectRows() throws Exception {
-        try (var conn = registry.getConnection("employees_csv");
+        try (var conn = registry.getConnection("employees");
              var stmt = conn.createStatement();
              var rs = stmt.executeQuery(
-                     "select name from employees_csv WHERE salary > 87000")) {
+                     "select name from employees WHERE salary > 87000")) {
             assertTrue(rs.next());
             assertEquals("Alice", rs.getString("name"));
             assertFalse(rs.next());
@@ -155,11 +155,11 @@ class FileSourceIntegrationTest {
                         " {\"id\":2,\"product\":\"Gadget\",\"price\":24.99}]");
 
         String namespace = registrar.registerFile("products.json");
-        assertEquals("products_json", namespace);
+        assertEquals("products", namespace);
 
         try (var conn = registry.getConnection(namespace);
              var stmt = conn.createStatement();
-             var rs   = stmt.executeQuery("SELECT count(*) FROM products_json")) {
+             var rs   = stmt.executeQuery("SELECT count(*) FROM products")) {
             assertTrue(rs.next());
             assertEquals(2, rs.getInt(1));
         }
@@ -179,11 +179,11 @@ class FileSourceIntegrationTest {
         }
 
         String namespace = registrar.registerFile("sales.parquet");
-        assertEquals("sales_parquet", namespace);
+        assertEquals("sales", namespace);
 
         try (var conn = registry.getConnection(namespace);
              var stmt = conn.createStatement();
-             var rs   = stmt.executeQuery("SELECT sum(amount) FROM sales_parquet")) {
+             var rs   = stmt.executeQuery("SELECT sum(amount) FROM sales")) {
             assertTrue(rs.next());
             assertEquals(300.0, rs.getDouble(1), 0.001);
         }
@@ -192,7 +192,7 @@ class FileSourceIntegrationTest {
     // Namespace collision
     @Test @Order(8)
     void registerFile_duplicateFilenameGetsUniqueSuffix() throws Exception {
-        // employees.csv already registered in test 4 — register again
+        // employees.csv already registered in test 4  -  register again
         Path csv2 = uploadsDir.resolve("employees_copy.csv");
         Files.writeString(csv2, "id,name\n3,Charlie\n");
 
@@ -206,15 +206,15 @@ class FileSourceIntegrationTest {
     // connection lasting for a short time tracking
     @Test @Order(9)
     void connectionRegistry_hasNamespaceReturnsTrueAfterRegister() {
-        assertTrue(registry.hasNamespace("employees_csv"));
+        assertTrue(registry.hasNamespace("employees"));
         assertFalse(registry.hasNamespace("does_not_exist"));
     }
 
     @Test @Order(10)
     void connectionRegistry_duplicateRegisterThrows() {
         var config = new io.sqlnotebook.config.ConnectionConfig(
-                "employees_csv", "duckdb", "", 0,
-                duckdbDir.resolve("employees_csv.db").toString(), "", "", 1);
+                "employees", "duckdb", "", 0,
+                duckdbDir.resolve("employees.db").toString(), "", "", 1);
 
         assertThrows(io.sqlnotebook.connection.ConnectionRegistryException.class,
                 () -> registry.register(config));
@@ -236,7 +236,7 @@ class FileSourceIntegrationTest {
         HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
 
         assertEquals(200, res.statusCode());
-        assertTrue(res.body().contains("orders_csv"));
+        assertTrue(res.body().contains("\"namespace\":\"orders\""));
         assertTrue(res.body().contains("\"kind\""));
         assertTrue(res.body().contains("\"addedAt\""));
         // S3 secret must never appear in the response
@@ -260,7 +260,7 @@ class FileSourceIntegrationTest {
         HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
 
         assertEquals(201, res.statusCode());
-        assertTrue(res.body().contains("cities_csv"));
+        assertTrue(res.body().contains("\"namespace\":\"cities\""));
         assertTrue(res.body().contains("\"kind\":\"file\""));
     }
 
@@ -279,7 +279,7 @@ class FileSourceIntegrationTest {
         HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
 
         assertEquals(201, res.statusCode());
-        assertTrue(res.body().contains("sample_json"));
+        assertTrue(res.body().contains("\"namespace\":\"sample\""));
     }
 
     // Unsupported extensions
@@ -385,7 +385,7 @@ class FileSourceIntegrationTest {
     @Test @Order(20)
     void queryEndpoint_canQueryUploadedCsv() throws Exception {
         // orders.csv was registered in test 11
-        String body = "{\"namespace\":\"orders_csv\",\"sql\":\"SELECT sum(total) AS t FROM orders_csv\"}";
+        String body = "{\"namespace\":\"orders\",\"sql\":\"SELECT sum(total) AS t FROM orders\"}";
 
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + PORT + "/query"))
@@ -413,13 +413,13 @@ class FileSourceIntegrationTest {
         s2.rehydrate();
 
         // orders.csv was registered via sourceRegistry.addFile in test 11
-        assertTrue(r2.hasNamespace("orders_csv"),
-                "orders_csv namespace should be restored after rehydration");
+        assertTrue(r2.hasNamespace("orders"),
+                "orders namespace should be restored after rehydration");
 
         // Confirm it's actually queryable
-        try (var conn = r2.getConnection("orders_csv");
+        try (var conn = r2.getConnection("orders");
              var stmt = conn.createStatement();
-             var rs   = stmt.executeQuery("SELECT count(*) FROM orders_csv")) {
+             var rs   = stmt.executeQuery("SELECT count(*) FROM orders")) {
             assertTrue(rs.next());
             assertEquals(2, rs.getInt(1));
         } finally {
@@ -430,7 +430,7 @@ class FileSourceIntegrationTest {
 
     /**
      * Build a minimal multipart/form-data body for file upload tests.
-     * Uses Java's built-in byte manipulation — no external libraries needed.
+     * Uses Java's built-in byte manipulation  -  no external libraries needed.
      */
     private static byte[] buildMultipart(String filename, String contentType,
                                          byte[] fileBytes, String boundary) {

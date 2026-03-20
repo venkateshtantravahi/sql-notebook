@@ -2,12 +2,17 @@
  * Wraps a label, input slot, and optional validation error message.
  * Pass the actual input element as children.
  *
- * @param {{ label: string, error?: string, children: React.ReactNode }} props
+ * @param {{ label: string, htmlFor?: string, error?: string, children: React.ReactNode }} props
  */
-export function Field({ label, error, children }) {
+export function Field({ label, htmlFor, error, children }) {
     return (
         <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-400">{label}</label>
+            <label
+                htmlFor={htmlFor}
+                className="text-xs font-medium text-gray-600 dark:text-gray-400"
+            >
+                {label}
+            </label>
             {children}
             {error && <span className="text-xs text-red-500 dark:text-red-400">{error}</span>}
         </div>

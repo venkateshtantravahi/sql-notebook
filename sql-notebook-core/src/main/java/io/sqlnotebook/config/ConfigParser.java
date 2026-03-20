@@ -7,7 +7,7 @@ import java.util.*;
 /**
  * Parses and writes database connection configurations from/to a sql.properties file.
  *
- * Expected format — one block per namespace:
+ * Expected format  -  one block per namespace:
  * <pre>
  *   prod_mysql.type=mysql
  *   prod_mysql.host=localhost
@@ -17,7 +17,7 @@ import java.util.*;
  *   prod_mysql.password=secret
  * </pre>
  *
- * SQLite omits host/port/username/password — only type and database are required.
+ * SQLite omits host/port/username/password  -  only type and database are required.
  */
 public class ConfigParser {
 
@@ -27,12 +27,12 @@ public class ConfigParser {
             "mysql", "postgresql", "sqlite", "oracle", "microsoft-sql-server"
     );
 
-    // Smart pool size — small fixed default, no user input required
+    // Smart pool size  -  small fixed default, no user input required
     private static final int DEFAULT_POOL_SIZE = 5;
 
     /**
-     * Parses sql.properties and returns a map of namespace → ConnectionConfig.
-     * Returns an empty map (not an exception) if the file does not exist —
+     * Parses sql.properties and returns a map of namespace -> ConnectionConfig.
+     * Returns an empty map (not an exception) if the file does not exist  - 
      * the app starts fine with no connections.
      */
     public Map<String, ConnectionConfig> parse(String configFile) {
@@ -60,7 +60,7 @@ public class ConfigParser {
         try (FileInputStream fis = new FileInputStream(configFile)) {
             props.load(fis);
         } catch (IOException e) {
-            throw new ConfigException("Cannot read config file: " + configFile + " — " + e.getMessage());
+            throw new ConfigException("Cannot read config file: " + configFile + "  -  " + e.getMessage());
         }
         return props;
     }

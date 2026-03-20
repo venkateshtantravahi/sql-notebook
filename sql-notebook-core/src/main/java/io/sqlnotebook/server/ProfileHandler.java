@@ -24,8 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * pass ?refresh=true to force a re-computation.
  *
  * Routes:
- *   GET /profile/{namespace}         — auto-discovers the table, then profiles it
- *   GET /profile/{namespace}/{table} — profiles the named table
+ *   GET /profile/{namespace}          -  auto-discovers the table, then profiles it
+ *   GET /profile/{namespace}/{table}  -  profiles the named table
  *
  * Response shape:
  * {
@@ -49,7 +49,7 @@ public class ProfileHandler extends HttpServlet {
     private final ProfilerService     profiler = new ProfilerService();
     private final ObjectMapper        mapper   = new ObjectMapper();
 
-    /** Cache key: "namespace::table" → column profiles */
+    /** Cache key: "namespace::table" -> column profiles */
     private final ConcurrentHashMap<String, List<ProfilerService.ColumnProfile>> cache =
             new ConcurrentHashMap<>();
 
@@ -72,7 +72,7 @@ public class ProfileHandler extends HttpServlet {
         // pathInfo is either "/{namespace}" or "/{namespace}/{table}"
         String path = req.getPathInfo();
         if (path == null || path.equals("/")) {
-            sendError(resp, 400, "namespace required — use /profile/{namespace} or /profile/{namespace}/{table}");
+            sendError(resp, 400, "namespace required  -  use /profile/{namespace} or /profile/{namespace}/{table}");
             return;
         }
 
@@ -118,7 +118,7 @@ public class ProfileHandler extends HttpServlet {
                 String cacheKey = namespace + "::" + table;
                 if (refresh) cache.remove(cacheKey);
 
-                // Only compute if absent — connection is still open here
+                // Only compute if absent  -  connection is still open here
                 columns = cache.computeIfAbsent(cacheKey, k -> {
                     try {
                         return profiler.profile(conn, table);
@@ -132,10 +132,10 @@ public class ProfileHandler extends HttpServlet {
 
         } catch (RuntimeException e) {
             Throwable cause = e.getCause() != null ? e.getCause() : e;
-            log.error("[profiler] {}/{} → {}", namespace, tableParam, cause.getMessage(), cause);
+            log.error("[profiler] {}/{} -> {}", namespace, tableParam, cause.getMessage(), cause);
             sendError(resp, 500, cause.getMessage());
         } catch (Exception e) {
-            log.error("[profiler] {}/{} → {}", namespace, tableParam, e.getMessage(), e);
+            log.error("[profiler] {}/{} -> {}", namespace, tableParam, e.getMessage(), e);
             sendError(resp, 500, e.getMessage());
         }
     }

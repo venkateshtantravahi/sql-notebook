@@ -24,7 +24,7 @@ import java.util.stream.IntStream;
  *   3. Registers the file as a queryable namespace in ConnectionRegistry
  *
  * Disk-backed (not in-memory):
- *   Writing to disk means pinned datasets survive JVM restarts — on next startup
+ *   Writing to disk means pinned datasets survive JVM restarts  -  on next startup
  *   rehydrate() re-registers every .db file it finds in the pinned directory.
  *   It also means RAM holds only the HikariCP pool metadata, not the data itself;
  *   DuckDB reads from disk with columnar compression at query time.
@@ -35,7 +35,7 @@ import java.util.stream.IntStream;
  *   correctly on pinned datasets.
  *
  * Pool size:
- *   Pinned datasets use a pool of 2 — they are read-only by definition and
+ *   Pinned datasets use a pool of 2  -  they are read-only by definition and
  *   DuckDB serialises writes internally, so 2 is sufficient for concurrent reads.
  */
 public class PinnedViewRegistry {
@@ -66,7 +66,7 @@ public class PinnedViewRegistry {
      * Materialise a federated result set as a typed DuckDB table, persist it to disk,
      * and register it as a queryable namespace in ConnectionRegistry.
      *
-     * @param name    user-chosen label — will be sanitised and prefixed with "pinned_"
+     * @param name    user-chosen label  -  will be sanitised and prefixed with "pinned_"
      * @param columns column names from the federated result
      * @param rows    data rows (Java objects: Long, Double, Boolean, String, null)
      * @return the registered namespace name (e.g. "pinned_user_orders")
@@ -86,7 +86,7 @@ public class PinnedViewRegistry {
         registry.registerEphemeral(config);
         pinnedNamespaces.add(namespace);
 
-        log.info("[pin] pinned '{}' → namespace '{}' ({} rows, {} cols)",
+        log.info("[pin] pinned '{}' -> namespace '{}' ({} rows, {} cols)",
                 name, namespace, rows.size(), columns.size());
         return namespace;
     }
@@ -182,7 +182,7 @@ public class PinnedViewRegistry {
                 try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
                     for (List<Object> row : rows) {
                         for (int i = 0; i < columns.size(); i++) {
-                            // Pass the original Java object — DuckDB JDBC maps types natively
+                            // Pass the original Java object  -  DuckDB JDBC maps types natively
                             ps.setObject(i + 1, i < row.size() ? row.get(i) : null);
                         }
                         ps.addBatch();

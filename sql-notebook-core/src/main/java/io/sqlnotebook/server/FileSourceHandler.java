@@ -31,10 +31,10 @@ import java.util.Set;
  * HTTP endpoints for the Universal Data Source feature.
  * Mounted at /sources/* in HttpServer.
  *
- * POST   /sources/upload       — multipart file upload → DuckDB namespace
- * POST   /sources/remote       — register HTTP/S3 URL  → DuckDB namespace
- * GET    /sources              — list all registered data sources
- * DELETE /sources/:namespace   — remove source + deregister namespace
+ * POST   /sources/upload        -  multipart file upload -> DuckDB namespace
+ * POST   /sources/remote        -  register HTTP/S3 URL  -> DuckDB namespace
+ * GET    /sources               -  list all registered data sources
+ * DELETE /sources/:namespace    -  remove source + deregister namespace
  *
  * File size limits enforced at the servlet layer:
  *   CSV / TSV / JSON / NDJSON   1 GB
@@ -47,10 +47,10 @@ import java.util.Set;
 public class FileSourceHandler extends HttpServlet {
     private static final Logger log = LoggerFactory.getLogger(FileSourceHandler.class);
 
-    // Max total multipart request size — 2 GB (largest single-file limit)
+    // Max total multipart request size  -  2 GB (largest single-file limit)
     private static final long MAX_REQUEST_SIZE  = 2L * 1024 * 1024 * 1024;
     private static final long MAX_FILE_SIZE     = 2L * 1024 * 1024 * 1024;
-    private static final int  FILE_SIZE_THRESHOLD = 1024 * 1024; // 1 MB — below this stays in memory
+    private static final int  FILE_SIZE_THRESHOLD = 1024 * 1024; // 1 MB  -  below this stays in memory
 
     // Per-extension size limits (bytes)
     private static final long MB  = 1024L * 1024;
@@ -132,7 +132,7 @@ public class FileSourceHandler extends HttpServlet {
     private void handleUpload(HttpServletRequest req, HttpServletResponse resp)
             throws IOException, ServletException {
 
-        // Configure multipart handling — Jetty requires this on the request
+        // Configure multipart handling  -  Jetty requires this on the request
         req.setAttribute("org.eclipse.jetty.multipartConfig",
                 new MultipartConfigElement(
                         System.getProperty("java.io.tmpdir"),
@@ -150,7 +150,7 @@ public class FileSourceHandler extends HttpServlet {
         }
 
         if (filePart == null) {
-            sendError(resp, 400, "No file uploaded — include a 'file' field in the form");
+            sendError(resp, 400, "No file uploaded  -  include a 'file' field in the form");
             return;
         }
 
@@ -165,7 +165,7 @@ public class FileSourceHandler extends HttpServlet {
         String ext = FileUtils.extension(filename);
         if (!SUPPORTED_EXTENSIONS.contains(ext)) {
             sendError(resp, 400,
-                    "Unsupported file type: .%s — supported: %s"
+                    "Unsupported file type: .%s  -  supported: %s"
                             .formatted(ext, String.join(", ", SUPPORTED_EXTENSIONS)));
             return;
         }
@@ -175,7 +175,7 @@ public class FileSourceHandler extends HttpServlet {
         long fileSize  = filePart.getSize();
         if (fileSize > sizeLimit) {
             sendError(resp, 413,
-                    "File too large: %.1f MB — limit for .%s is %.0f MB"
+                    "File too large: %.1f MB  -  limit for .%s is %.0f MB"
                             .formatted(fileSize / (double) MB, ext, sizeLimit / (double) MB));
             return;
         }
@@ -190,10 +190,31 @@ public class FileSourceHandler extends HttpServlet {
             return;
         }
 
+        // Optional namespace hint from the multipart form
+        String namespaceHint = null;
+        try {
+            Part nsPart = req.getPart("namespace");
+            if (nsPart != null) {
+                namespaceHint = new String(nsPart.getInputStream().readAllBytes()).strip();
+                if (namespaceHint.isBlank()) namespaceHint = null;
+            }
+        } catch (Exception ignored) {
+            // namespace field is optional  -  ignore parse errors
+        }
+
         // Register with DuckDB
         String namespace;
         try {
-            namespace = sourceRegistry.addFile(filename);
+            namespace = (namespaceHint != null)
+                    ? sourceRegistry.addFile(filename, namespaceHint)
+                    : sourceRegistry.addFile(filename);
+        } catch (DuckDbRegistrar.NamespaceConflictException e) {
+            Files.deleteIfExists(dest);
+            ObjectNode conflict = mapper.createObjectNode();
+            conflict.put("error",     "Namespace \"" + e.taken + "\" is already in use");
+            conflict.put("suggested", e.suggested);
+            sendJson(resp, 409, conflict);
+            return;
         } catch (DuckDbRegistrar.DuckDbRegistrarException e) {
             // Clean up the uploaded file if registration fails
             Files.deleteIfExists(dest);
@@ -201,7 +222,7 @@ public class FileSourceHandler extends HttpServlet {
             return;
         }
 
-        log.info("[upload] saved '{}' ({} bytes) → namespace '{}'", filename, fileSize, namespace);
+        log.info("[upload] saved '{}' ({} bytes) -> namespace '{}'", filename, fileSize, namespace);
 
         ObjectNode body = mapper.createObjectNode();
         body.put("namespace", namespace);
@@ -219,10 +240,10 @@ public class FileSourceHandler extends HttpServlet {
      * Request body:
      * {
      *   "url":             "s3://bucket/data.parquet",   // required
-     *   "label":           "my_dataset",                 // optional — used as namespace base
-     *   "s3Endpoint":      "https://...",                // optional — non-AWS providers
+     *   "label":           "my_dataset",                 // optional  -  used as namespace base
+     *   "s3Endpoint":      "https://...",                // optional  -  non-AWS providers
      *   "s3Region":        "us-east-1",                  // optional
-     *   "s3AccessKeyId":   "AKIA...",                    // optional — public buckets don't need this
+     *   "s3AccessKeyId":   "AKIA...",                    // optional  -  public buckets don't need this
      *   "s3SecretAccessKey": "..."                       // optional
      * }
      *
@@ -257,7 +278,7 @@ public class FileSourceHandler extends HttpServlet {
         String s3AccessKeyId  = nullIfEmpty(body.path("s3AccessKeyId").asText(null));
         String s3SecretKey    = nullIfEmpty(body.path("s3SecretAccessKey").asText(null));
 
-        // Build S3Config whenever ANY s3 field is provided — not just when credentials exist.
+        // Build S3Config whenever ANY s3 field is provided  -  not just when credentials exist.
         // This ensures the endpoint is applied even for MinIO setups where the bucket is
         // accessible with credentials but the user may omit region.
         boolean hasS3Fields = s3Endpoint != null || s3Region != null || s3AccessKeyId != null;
@@ -273,7 +294,7 @@ public class FileSourceHandler extends HttpServlet {
             return;
         }
 
-        log.info("[remote] registered '{}' → namespace '{}'", url, namespace);
+        log.info("[remote] registered '{}' -> namespace '{}'", url, namespace);
 
         ObjectNode responseBody = mapper.createObjectNode();
         responseBody.put("namespace", namespace);
@@ -325,7 +346,7 @@ public class FileSourceHandler extends HttpServlet {
 
     /**
      * Extract the submitted filename from a multipart Part.
-     * Jetty / servlet containers expose this differently — handle both.
+     * Jetty / servlet containers expose this differently  -  handle both.
      */
     private String getSubmittedFilename(Part part) {
         // Standard servlet 3.1+ approach
@@ -345,12 +366,12 @@ public class FileSourceHandler extends HttpServlet {
     }
 
     /**
-     * Sanitise a filename — strip path separators and normalise to just the base name.
+     * Sanitise a filename  -  strip path separators and normalise to just the base name.
      * Prevents path traversal attacks.
      */
     private String sanitiseFilename(String raw) {
         if (raw == null) return null;
-        // Strip any directory components — keep only the filename
+        // Strip any directory components  -  keep only the filename
         String name = Path.of(raw).getFileName().toString();
         // Remove characters that could cause issues on any OS
         return name.replaceAll("[^a-zA-Z0-9._\\- ]", "_");

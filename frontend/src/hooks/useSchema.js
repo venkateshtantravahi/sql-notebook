@@ -1,21 +1,22 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useBackendReady } from './useBackendReady.js'
 
-// useSchema — fetches schema for all known namespaces.
-// Flow: GET /namespaces → GET /schema/:namespace for each.
+// useSchema - fetches schema for all known namespaces.
+// Flow: GET /namespaces -> GET /schema/:namespace for each.
 // Re-fetches on 'namespace-added' event so the tree stays in sync without a page refresh.
 function useSchema() {
     const [schema, setSchema] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
 
-    const load = useCallback(async () => {
-        let cancelled = false
+    const backendReady = useBackendReady()
 
+    const load = useCallback(async () => {
         try {
             setLoading(true)
             setError(null)
 
-            // Fetch namespaces and pinned list together — pinned datasets are single flat
+            // Fetch namespaces and pinned list together - pinned datasets are single flat
             // tables with no meaningful schema or ERD, so we exclude them entirely.
             const [nsResult, pinResult] = await Promise.allSettled([
                 fetch('/namespaces').then((r) => {
@@ -51,8 +52,6 @@ function useSchema() {
                 )
             )
 
-            if (cancelled) return
-
             const schemas = results
                 .map((result, i) => {
                     if (result.status === 'fulfilled') return result.value
@@ -63,20 +62,18 @@ function useSchema() {
 
             setSchema(schemas)
         } catch (err) {
-            if (!cancelled) setError(err.message)
+            setError(err.message)
         } finally {
-            if (!cancelled) setLoading(false)
-        }
-
-        return () => {
-            cancelled = true
+            setLoading(false)
         }
     }, [])
 
-    // Fetch on mount
+    // Fetch on mount - gated on backendReady so the schema panel never fires
+    // requests before App.jsx completes its health-check + settle sequence.
     useEffect(() => {
+        if (!backendReady) return
         load()
-    }, [load])
+    }, [load, backendReady])
 
     // Re-fetch whenever a connection is added or removed
     useEffect(() => {

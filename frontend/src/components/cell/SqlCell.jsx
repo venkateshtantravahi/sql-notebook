@@ -29,20 +29,20 @@ function buildFontExt(level) {
 function SqlCell({ cell }) {
     const { theme } = useThemeStore()
     const { level } = useZoomStore()
-    const { updateQuery, updateNamespace, deleteCell } = useCellStore()
+    const { updateSource, updateNamespace, deleteCell } = useCellStore()
     const editorRef = useRef(null)
     const viewRef = useRef(null)
     const runQuery = useQuerySocket()
     const namespaces = useFetchNamespaces()
 
-    // Build editor ONCE — theme and font go through Compartments so they
+    // Build editor ONCE - theme and font go through Compartments so they
     // can be hot-swapped when the stores change without remounting.
     useEffect(() => {
         if (!editorRef.current) return
 
         const view = new EditorView({
             state: EditorState.create({
-                doc: cell.query,
+                doc: cell.source,
                 extensions: [
                     basicSetup,
                     sql(),
@@ -50,7 +50,7 @@ function SqlCell({ cell }) {
                     fontCompartment.of(buildFontExt(level)),
                     EditorView.updateListener.of((update) => {
                         if (update.docChanged) {
-                            updateQuery(cell.id, update.state.doc.toString())
+                            updateSource(cell.id, update.state.doc.toString())
                         }
                     }),
                 ],
@@ -62,14 +62,14 @@ function SqlCell({ cell }) {
         return () => view.destroy()
     }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Hot-swap theme when store changes — no remount needed
+    // Hot-swap theme when store changes - no remount needed
     useEffect(() => {
         viewRef.current?.dispatch({
             effects: themeCompartment.reconfigure(buildThemeExt(theme === 'dark')),
         })
     }, [theme])
 
-    // Hot-swap font size when zoom changes — no remount needed
+    // Hot-swap font size when zoom changes - no remount needed
     useEffect(() => {
         viewRef.current?.dispatch({
             effects: fontCompartment.reconfigure(buildFontExt(level)),
@@ -88,11 +88,11 @@ function SqlCell({ cell }) {
     }
 
     function handleRun() {
-        const sql = cell.query.trim()
+        const sql = cell.source.trim()
         if (!sql) return
         const federated = isFederatedQuery(sql)
         if (!federated && !cell.namespace) return
-        // Federated queries send namespace=null — backend routes to FederatedQueryExecutor
+        // Federated queries send namespace=null - backend routes to FederatedQueryExecutor
         runQuery(cell.id, federated ? null : cell.namespace, sql)
     }
 

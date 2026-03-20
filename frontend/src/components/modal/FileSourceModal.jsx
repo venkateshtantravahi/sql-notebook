@@ -25,9 +25,15 @@ const ACCEPTED_MIME = [
 
 // Local files
 
+function stemOf(filename) {
+    const parts = filename.split('.')
+    return parts.length > 1 ? parts.slice(0, -1).join('.') : filename
+}
+
 function LocalFileTab({ onSuccess }) {
     const [dragging, setDragging] = useState(false)
     const [file, setFile] = useState(null)
+    const [namespace, setNamespace] = useState('')
     const [status, setStatus] = useState(null) // null | 'uploading' | 'success' | 'error'
     const [statusMsg, setStatusMsg] = useState('')
     const inputRef = useRef(null)
@@ -41,6 +47,7 @@ function LocalFileTab({ onSuccess }) {
             return
         }
         setFile(f)
+        setNamespace(stemOf(f.name))
         setStatus(null)
         setStatusMsg('')
     }
@@ -66,6 +73,7 @@ function LocalFileTab({ onSuccess }) {
 
         const body = new FormData()
         body.append('file', file, file.name)
+        if (namespace.trim()) body.append('namespace', namespace.trim())
 
         try {
             const res = await fetch('/sources/upload', { method: 'POST', body })
@@ -75,6 +83,10 @@ function LocalFileTab({ onSuccess }) {
                 setStatusMsg(`Registered as namespace "${data.namespace}"`)
                 window.dispatchEvent(new CustomEvent('namespace-added'))
                 onSuccess?.()
+            } else if (res.status === 409) {
+                setStatus('error')
+                setStatusMsg(`Name "${namespace.trim()}" is already taken - try: ${data.suggested}`)
+                setNamespace(data.suggested ?? '')
             } else {
                 setStatus('error')
                 setStatusMsg(data.error ?? 'Upload failed')
@@ -87,6 +99,7 @@ function LocalFileTab({ onSuccess }) {
 
     function reset() {
         setFile(null)
+        setNamespace('')
         setStatus(null)
         setStatusMsg('')
         if (inputRef.current) inputRef.current.value = ''
@@ -115,6 +128,8 @@ function LocalFileTab({ onSuccess }) {
             >
                 <input
                     ref={inputRef}
+                    id="local-file-upload"
+                    name="file"
                     type="file"
                     accept={ACCEPTED_MIME}
                     className="hidden"
@@ -152,11 +167,34 @@ function LocalFileTab({ onSuccess }) {
                             </span>
                         </p>
                         <p className="text-xs text-gray-400 dark:text-gray-500">
-                            CSV · TSV · JSON · NDJSON · Parquet · Arrow · Excel · SQLite
+                            CSV | TSV | JSON | NDJSON | Parquet | Arrow | Excel | SQLite
                         </p>
                     </>
                 )}
             </div>
+
+            {file && (
+                <Field label="Namespace name" htmlFor="local-namespace">
+                    <Input
+                        id="local-namespace"
+                        name="namespace"
+                        type="text"
+                        placeholder="e.g. sales_data"
+                        value={namespace}
+                        onChange={(e) => {
+                            setNamespace(e.target.value)
+                            if (status === 'error') {
+                                setStatus(null)
+                                setStatusMsg('')
+                            }
+                        }}
+                    />
+                    <span className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                        Used to query this file:{' '}
+                        <code className="font-mono">SELECT * FROM {namespace || '...'}</code>
+                    </span>
+                </Field>
+            )}
 
             <StatusMessage status={status} message={statusMsg} />
 
@@ -171,7 +209,7 @@ function LocalFileTab({ onSuccess }) {
                 "
             >
                 {status === 'uploading'
-                    ? 'Uploading…'
+                    ? 'Uploading...'
                     : status === 'success'
                       ? 'Uploaded'
                       : 'Upload File'}
@@ -266,8 +304,10 @@ function RemoteSourceTab({ onSuccess }) {
 
     return (
         <div className="flex flex-col gap-4">
-            <Field label="URL *" error={errors.url}>
+            <Field label="URL *" htmlFor="remote-url" error={errors.url}>
                 <Input
+                    id="remote-url"
+                    name="url"
                     type="text"
                     placeholder="https://example.com/data.parquet  or  s3://bucket/key.csv"
                     value={form.url}
@@ -275,8 +315,10 @@ function RemoteSourceTab({ onSuccess }) {
                 />
             </Field>
 
-            <Field label="Label (optional)">
+            <Field label="Label (optional)" htmlFor="remote-label">
                 <Input
+                    id="remote-label"
+                    name="label"
                     type="text"
                     placeholder="my_sales_data"
                     value={form.label}
@@ -317,16 +359,20 @@ function RemoteSourceTab({ onSuccess }) {
                 {showS3 && (
                     <div className="px-3 py-3 flex flex-col gap-3 border-t border-gray-200 dark:border-gray-700">
                         <div className="grid grid-cols-2 gap-3">
-                            <Field label="Endpoint">
+                            <Field label="Endpoint" htmlFor="s3-endpoint">
                                 <Input
+                                    id="s3-endpoint"
+                                    name="s3Endpoint"
                                     type="text"
                                     placeholder="https://s3.amazonaws.com"
                                     value={form.s3Endpoint}
                                     onChange={(e) => set('s3Endpoint', e.target.value)}
                                 />
                             </Field>
-                            <Field label="Region">
+                            <Field label="Region" htmlFor="s3-region">
                                 <Input
+                                    id="s3-region"
+                                    name="s3Region"
                                     type="text"
                                     placeholder="us-east-1"
                                     value={form.s3Region}
@@ -335,16 +381,20 @@ function RemoteSourceTab({ onSuccess }) {
                             </Field>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                            <Field label="Access Key ID">
+                            <Field label="Access Key ID" htmlFor="s3-access-key-id">
                                 <Input
+                                    id="s3-access-key-id"
+                                    name="s3AccessKeyId"
                                     type="text"
                                     placeholder="AKIAIOSFODNN7EXAMPLE"
                                     value={form.s3AccessKeyId}
                                     onChange={(e) => set('s3AccessKeyId', e.target.value)}
                                 />
                             </Field>
-                            <Field label="Secret Access Key">
+                            <Field label="Secret Access Key" htmlFor="s3-secret-key">
                                 <Input
+                                    id="s3-secret-key"
+                                    name="s3SecretAccessKey"
                                     type="password"
                                     placeholder="******************"
                                     value={form.s3SecretAccessKey}
@@ -368,7 +418,7 @@ function RemoteSourceTab({ onSuccess }) {
                 "
             >
                 {status === 'adding'
-                    ? 'Adding…'
+                    ? 'Adding...'
                     : status === 'success'
                       ? 'Added'
                       : 'Add Remote Source'}

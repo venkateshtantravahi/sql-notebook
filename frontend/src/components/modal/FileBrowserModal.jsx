@@ -6,7 +6,7 @@ import { formatFileSize } from '../../utils/fileUtils.jsx'
 // FileBrowserModal
 // Lets the user navigate the server-side filesystem and pick a .db / .sqlite file.
 // Calls onSelect(absolutePath) when a file is chosen.
-// Uses GET /files/browse?path= → { path, parent, entries: [{name, type, size?}] }
+// Uses GET /files/browse?path= -> { path, parent, entries: [{name, type, size?}] }
 
 function FileBrowserModal({ isOpen, onSelect, onClose, initialPath }) {
     const [currentPath, setCurrentPath] = useState(initialPath || '')
@@ -231,7 +231,7 @@ function FileBrowserModal({ isOpen, onSelect, onClose, initialPath }) {
                             </>
                         ) : (
                             <span className="text-gray-300 dark:text-gray-700 italic">
-                                No file selected — click a .db file above
+                                No file selected -- click a .db file above
                             </span>
                         )}
                     </p>

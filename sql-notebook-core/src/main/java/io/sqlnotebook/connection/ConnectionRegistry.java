@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * Pool sizing strategy:
  *   DuckDB is file-based and serialises writes internally, so a pool of 1
- *   is correct — extra connections would only queue, never execute in parallel.
+ *   is correct  -  extra connections would only queue, never execute in parallel.
  *   For network databases (Postgres, MySQL, etc.) the pool size is capped at
  *   half the available CPU cores (min 2) so the JVM doesn't spawn more
  *   threads than the hardware can service concurrently.
@@ -29,11 +29,11 @@ import java.util.concurrent.ConcurrentHashMap;
  *   a proportional fraction of the JVM heap at startup.
  *
  * HikariCP knobs applied to every pool:
- *   connectionTimeout  5 s  — fail fast; 30 s default hangs the UI
- *   keepaliveTime     60 s  — pings idle connections so firewalls don't drop them
- *   idleTimeout        5 m  — release unused connections back to the OS
- *   maxLifetime       30 m  — recycle long-lived connections to avoid stale state
- *   minimumIdle        1    — always keep one connection warm
+ *   connectionTimeout  5 s   -  fail fast; 30 s default hangs the UI
+ *   keepaliveTime     60 s   -  pings idle connections so firewalls don't drop them
+ *   idleTimeout        5 m   -  release unused connections back to the OS
+ *   maxLifetime       30 m   -  recycle long-lived connections to avoid stale state
+ *   minimumIdle        1     -  always keep one connection warm
  *
  * Thread safety:
  *   pools and ephemeralNamespaces use ConcurrentHashMap so hot-add/remove
@@ -43,7 +43,7 @@ public class ConnectionRegistry {
 
     private static final Logger log = LoggerFactory.getLogger(ConnectionRegistry.class);
 
-    // Derived once at class-load time — stable for the lifetime of the JVM
+    // Derived once at class-load time  -  stable for the lifetime of the JVM
     private static final int  CPUS            = Runtime.getRuntime().availableProcessors();
     private static final int  DUCKDB_THREADS  = Math.max(1, CPUS / 2);
     private static final long JVM_MAX_MB      = Runtime.getRuntime().maxMemory() / (1024L * 1024L);
@@ -63,10 +63,10 @@ public class ConnectionRegistry {
 
     /**
      * Eagerly validates every pool by borrowing and returning one connection.
-     * Namespaces that fail are marked unhealthy and logged — the app continues.
+     * Namespaces that fail are marked unhealthy and logged  -  the app continues.
      * Call this after all initial pools are built, before accepting HTTP traffic.
      *
-     * @return map of namespace → error message; empty string = healthy
+     * @return map of namespace -> error message; empty string = healthy
      */
     public Map<String, String> warmUp() {
         Map<String, String> results = new LinkedHashMap<>();
@@ -193,7 +193,7 @@ public class ConnectionRegistry {
         hikari.setPoolName("pool-" + config.namespace());
 
         // --- Pool size -------------------------------------------------------
-        // DuckDB: pool of 1 — file-based, internal scheduler handles parallelism
+        // DuckDB: pool of 1  -  file-based, internal scheduler handles parallelism
         // Others: min(user-configured, half of CPUs), never below 2
         if (config.type().equals("duckdb")) {
             hikari.setMaximumPoolSize(1);

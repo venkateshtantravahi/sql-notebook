@@ -187,7 +187,7 @@ function computeLayout(tables) {
         deletable: false,
     }))
 
-    // React Flow edges — one per FK column
+    // React Flow edges - one per FK column
     const rfEdges = []
     tables.forEach((t) => {
         t.columns.forEach((col) => {
@@ -201,7 +201,7 @@ function computeLayout(tables) {
                 type: 'smoothstep',
                 animated: false,
                 markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10 },
-                label: `${col.name} → ${col.referencedColumn ?? ''}`,
+                label: `${col.name} -> ${col.referencedColumn ?? ''}`,
                 labelStyle: { fontSize: 9, fill: '#9ca3af' },
                 labelBgStyle: { fill: 'transparent' },
                 style: { strokeWidth: 1.5 },
@@ -330,7 +330,7 @@ function TableNode({ data, selected }) {
                             whiteSpace: 'nowrap',
                         }}
                     >
-                        {col.type?.length > 14 ? col.type.slice(0, 12) + '…' : col.type}
+                        {col.type?.length > 14 ? col.type.slice(0, 12) + '...' : col.type}
                     </span>
                 </div>
             ))}
@@ -348,7 +348,7 @@ function ErdInner({ tables, isDark }) {
     const [edges, setEdges, onEdgesChange] = useEdgesState(rfEdges)
     const { fitView } = useReactFlow()
 
-    // Sync when namespace switches — fitView/setNodes/setEdges are stable React Flow refs
+    // Sync when namespace switches - fitView/setNodes/setEdges are stable React Flow refs
     useEffect(() => {
         const { rfNodes: newNodes, rfEdges: newEdges } = computeLayout(tables)
         setNodes(newNodes)

@@ -24,14 +24,14 @@ import java.util.Map;
  * Application entry point.
  *
  * Startup sequence:
- *   1. Parse sql.properties → ConnectionRegistry (persistent JDBC connections)
+ *   1. Parse sql.properties -> ConnectionRegistry (persistent JDBC connections)
  *   2. Build DuckDbRegistrar (creates ~/.sqlnotebook/duckdb/ and uploads/ dirs)
- *   3. Build FileSourceRegistry → rehydrate sources.json (re-registers all
+ *   3. Build FileSourceRegistry -> rehydrate sources.json (re-registers all
  *      file and remote data sources from the previous session)
  *   4. Start HttpServer on localhost:4000
  *   5. Register JVM shutdown hook to cleanly close all pools
  *
- * sql.properties is optional — the app starts fine with no JDBC connections
+ * sql.properties is optional - the app starts fine with no JDBC connections
  * configured (the user can add them at runtime via /connections/add).
  */
 public class App {
@@ -48,40 +48,53 @@ public class App {
             return;
         }
 
+        // --open <file.sqlnb>  or a bare *.sqlnb path (passed by the OS / jpackage
+        // when the user double-clicks the file) → copy it as the initial draft so the
+        // browser loads that notebook immediately on startup.
+        String openFile = parseOpenFile(args);
+        if (openFile != null) {
+            copyAsDraft(openFile);
+        }
+
         int port = parsePort(args);
 
-        // Step 1 — Persistant JDBC connection
+        // Step 1 - Persistant JDBC connection
         Map<String, ConnectionConfig> configs = loadConfigs();
         ConnectionRegistry registry = new  ConnectionRegistry(configs);
         log.info("[startup] loaded {} persistant connection(s)", configs.size());
 
-        // Step 2 — DuckDB registrar
+        // Step 2 - DuckDB registrar
         DuckDbRegistrar duckDbRegistrar = new DuckDbRegistrar(registry);
         log.info("[startup] DuckDB registrar loaded");
 
-        // Step 3 — File Source registry
+        // Step 3 - File Source registry
         FileSourceRegistry sourceRegistry = new FileSourceRegistry(duckDbRegistrar);
         sourceRegistry.rehydrate();
         log.info("[startup] file source registry ready ({} source(s) rehydrated)", sourceRegistry.list().size());
 
-        // Step 4 — Pinned view registry (disk-backed DuckDB datasets from federated results)
+        // Step 4 - Pinned view registry (disk-backed DuckDB datasets from federated results)
         PinnedViewRegistry pinnedRegistry = new PinnedViewRegistry(registry);
         log.info("[startup] pinned view registry ready ({} pinned dataset(s))", pinnedRegistry.listPinned().size());
 
-        // Step 5 — Warm up all pools (validates connections, marks unhealthy ones)
+        // Step 5 - Warm up all pools (validates connections, marks unhealthy ones)
         Map<String, String> warmUpResults = registry.warmUp();
         long healthy   = warmUpResults.values().stream().filter(String::isEmpty).count();
         long unhealthy = warmUpResults.size() - healthy;
-        log.info("[startup] pool warm-up complete — {}/{} healthy", healthy, warmUpResults.size());
-        if (unhealthy > 0) log.warn("[startup] {} pool(s) failed warm-up — check credentials/connectivity", unhealthy);
+        log.info("[startup] pool warm-up complete - {}/{} healthy", healthy, warmUpResults.size());
+        if (unhealthy > 0) log.warn("[startup] {} pool(s) failed warm-up - check credentials/connectivity", unhealthy);
 
-        // Step 6 — Http server
+        // Step 6 - Http server
+        // --dir <path> or a bare directory path lets users run:
+        //   sql-notebook                   → workspace = CWD
+        //   sql-notebook ~/projects/myapp  → workspace = ~/projects/myapp
+        String workspaceDir = parseWorkspaceDir(args);
+        log.info("[startup] workspace directory: {}", workspaceDir);
         QueryExecutor executor = new QueryExecutor(registry);
-        HttpServer server = new HttpServer(port, registry, executor, sourceRegistry, duckDbRegistrar, pinnedRegistry, (int) healthy);
+        HttpServer server = new HttpServer(port, registry, executor, sourceRegistry, duckDbRegistrar, pinnedRegistry, (int) healthy, workspaceDir);
         server.start();
         log.info("[startup] server listening on http://127.0.0.1:{}", server.getPort());
 
-        // Step 6 — Shutdown hook
+        // Step 6 - Shutdown hook
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             log.info("[shutdown] stopping server...");
             try { server.stop(); } catch (Exception e) {
@@ -119,7 +132,7 @@ public class App {
         log.info("[clean] deleted {} file(s) from {}", uploaded, uploadsDir);
         log.info("[clean] deleted {} file(s) from {}", pinned,   pinnedDir);
         if (sourcesDeleted) log.info("[clean] deleted sources.json");
-        log.info("[clean] done — restart the app normally to begin fresh");
+        log.info("[clean] done - restart the app normally to begin fresh");
     }
 
     /**
@@ -143,35 +156,116 @@ public class App {
     }
 
     /**
-     * Parse sql.properties if it exists — silently returns empty map if absent.
+     * Parse sql.properties if it exists - silently returns empty map if absent.
      * The app is fully functional without any pre-configured JDBC connections.
      */
     private static Map<String, ConnectionConfig> loadConfigs() {
         File propsFile = new File(CONFIG_FILE);
         if (!propsFile.exists()) {
-            log.info("[startup] no sql.properties found — starting with no persistent connections");
+            log.info("[startup] no sql.properties found - starting with no persistent connections");
             return Collections.emptyMap();
         }
         try {
             return new ConfigParser().parse(CONFIG_FILE);
         } catch (Exception e) {
-            log.warn("[startup] failed to parse sql.properties: {} — starting with no connections",
+            log.warn("[startup] failed to parse sql.properties: {} - starting with no connections",
                     e.getMessage());
             return Collections.emptyMap();
         }
     }
 
     /**
-     * Allow port override via first CLI arg: java -jar app.jar port_num
+     * Resolves the workspace directory from CLI args.
+     *
+     * Accepted forms:
+     *   sql-notebook                    → uses CWD (default)
+     *   sql-notebook ~/projects/myapp   → uses that directory as workspace
+     *   sql-notebook --dir ~/projects   → same, explicit flag form
+     *
+     * If the resolved path does not exist or is not a directory, falls back to CWD
+     * with a warning so the app still starts cleanly.
+     */
+    private static String parseWorkspaceDir(String[] args) {
+        String candidate = null;
+        for (int i = 0; i < args.length; i++) {
+            if ("--dir".equals(args[i]) && i + 1 < args.length) {
+                candidate = args[i + 1];
+                break;
+            }
+            // A bare argument that looks like a directory path (not a flag, not a port,
+            // not a .sqlnb file) is treated as the workspace directory.
+            if (!args[i].startsWith("--") && !args[i].endsWith(".sqlnb")) {
+                try { Integer.parseInt(args[i]); continue; } catch (NumberFormatException ignored) {}
+                candidate = args[i];
+            }
+        }
+        if (candidate == null) return System.getProperty("user.dir");
+
+        // Expand ~ to the user's home directory
+        if (candidate.startsWith("~/") || candidate.equals("~")) {
+            candidate = System.getProperty("user.home") + candidate.substring(1);
+        }
+        Path dir = Path.of(candidate).toAbsolutePath().normalize();
+        if (!Files.isDirectory(dir)) {
+            log.warn("[startup] workspace path is not a directory: {} — using CWD", dir);
+            return System.getProperty("user.dir");
+        }
+        return dir.toString();
+    }
+
+    /**
+     * Scans args for a numeric port value.
      * Falls back to DEFAULT_PORT (8080) if absent or invalid.
      */
     private static int parsePort(String[] args) {
-        if (args.length > 0) {
+        for (String arg : args) {
             try {
-                int port = Integer.parseInt(args[0]);
+                int port = Integer.parseInt(arg);
                 if (port > 0 && port < 65536) return port;
             } catch (NumberFormatException ignored) {}
         }
         return DEFAULT_PORT;
+    }
+
+    /**
+     * Scans args for {@code --open <path>} or a bare {@code *.sqlnb} path.
+     * Returns the path string, or null if not present.
+     * This handles both explicit CLI usage and OS/jpackage file-association launches
+     * where the OS passes the file path as the first argument.
+     */
+    private static String parseOpenFile(String[] args) {
+        for (int i = 0; i < args.length; i++) {
+            if ("--open".equals(args[i]) && i + 1 < args.length) {
+                return args[i + 1];
+            }
+            if (args[i].endsWith(".sqlnb")) {
+                return args[i];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Copies {@code filePath} to {@code ~/.sqlnotebook/drafts/current.sqlnb} so it
+     * becomes the draft the browser loads on startup.  Uses an atomic temp-then-rename
+     * write to avoid a partial read race with the DraftHandler.
+     */
+    private static void copyAsDraft(String filePath) {
+        Path src = Path.of(filePath);
+        if (!Files.exists(src)) {
+            log.warn("[startup] --open file not found: {}", filePath);
+            return;
+        }
+        try {
+            Path draftDir = Path.of(System.getProperty("user.home")).resolve(".sqlnotebook/drafts");
+            Files.createDirectories(draftDir);
+            Path draft = draftDir.resolve("current.sqlnb");
+            Path tmp   = draftDir.resolve("current.sqlnb.tmp");
+            Files.copy(src, tmp, StandardCopyOption.REPLACE_EXISTING);
+            Files.move(tmp, draft, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            log.info("[startup] opened notebook: {}", src.toAbsolutePath());
+        } catch (IOException e) {
+            log.warn("[startup] could not copy notebook to draft: {}", e.getMessage());
+        }
     }
 }

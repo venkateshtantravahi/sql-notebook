@@ -36,7 +36,7 @@ class ProfilerServiceTest {
 
     private final ProfilerService service = new ProfilerService();
 
-    // DuckDB — native SUMMARIZE path
+    // DuckDB  -  native SUMMARIZE path
 
     @Test
     void duckDbProfileReturnsColumnStats() throws Exception {
@@ -113,7 +113,7 @@ class ProfilerServiceTest {
         }
     }
 
-    // SQLite — generic path with double-quote identifier quoting
+    // SQLite  -  generic path with double-quote identifier quoting
 
     @Test
     void sqliteProfileReturnsColumnStats() throws Exception {
@@ -164,7 +164,7 @@ class ProfilerServiceTest {
         }
     }
 
-    // MySQL — generic path with backtick quoting
+    // MySQL  -  generic path with backtick quoting
 
     @Test
     void mysqlProfileUsesBacktickQuotingCorrectly() throws Exception {
@@ -214,7 +214,7 @@ class ProfilerServiceTest {
         }
     }
 
-    // PostgreSQL — generic path with double-quote quoting
+    // PostgreSQL  -  generic path with double-quote quoting
 
     @Test
     void postgresProfileReturnsColumnStats() throws Exception {

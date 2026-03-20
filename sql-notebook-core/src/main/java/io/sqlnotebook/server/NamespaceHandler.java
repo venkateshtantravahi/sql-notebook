@@ -37,7 +37,7 @@ public class NamespaceHandler extends HttpServlet {
 
     private final ConnectionRegistry registry;
     private final ObjectMapper mapper = new ObjectMapper();
-    /* Bounded pool — prevents unbounded thread growth when many namespaces are registered */
+    /* Bounded pool  -  prevents unbounded thread growth when many namespaces are registered */
     private final ExecutorService executor = Executors.newFixedThreadPool(MAX_PING_THREADS);
 
     public NamespaceHandler(ConnectionRegistry registry) {
@@ -90,7 +90,7 @@ public class NamespaceHandler extends HttpServlet {
 
     /**
      * Pings a single namespace by executing SELECT 1.
-     * Returns a health map regardless of outcome — failures are captured
+     * Returns a health map regardless of outcome  -  failures are captured
      * as healthy=false with an error message rather than thrown.
      */
     private Map<String, Object> ping(String namespace) {
