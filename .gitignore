@@ -179,3 +179,25 @@ docs/javadoc/
 # Dependencies
 node_modules/
 frontend/node_modules/
+
+# Local configuration - contains secrets, never commit
+sql.properties
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Vim
+*.swp
+*.swo
+*.swn
+*~
+
+# Emacs
+\#*\#
+.\#*
