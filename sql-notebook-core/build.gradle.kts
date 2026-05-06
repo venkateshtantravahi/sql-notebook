@@ -25,7 +25,7 @@ dependencies {
     // Source: https://mvnrepository.com/artifact/com.mysql/mysql-connector-j
     implementation("com.mysql:mysql-connector-j:9.6.0")
     // Source: https://mvnrepository.com/artifact/org.postgresql/postgresql
-    implementation("org.postgresql:postgresql:42.7.10")
+    implementation("org.postgresql:postgresql:42.7.11")
     // Source: https://mvnrepository.com/artifact/org.xerial/sqlite-jdbc
     implementation("org.xerial:sqlite-jdbc:3.51.2.0")
     // Source: https://mvnrepository.com/artifact/com.microsoft.sqlserver/mssql-jdbc
