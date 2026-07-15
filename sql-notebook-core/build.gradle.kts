@@ -39,7 +39,7 @@ dependencies {
     // Source: https://mvnrepository.com/artifact/org.eclipse.jetty.ee10.websocket/jetty-ee10-websocket-jakarta-server
     implementation("org.eclipse.jetty.ee10.websocket:jetty-ee10-websocket-jakarta-server:12.1.5")
     // Source: https://mvnrepository.com/artifact/tools.jackson.core/jackson-databind
-    implementation("tools.jackson.core:jackson-databind:3.0.0")
+    implementation("tools.jackson.core:jackson-databind:3.1.4")
     // Source: https://mvnrepository.com/artifact/jakarta.servlet/jakarta.servlet-api
     implementation("jakarta.servlet:jakarta.servlet-api:6.0.0")
     // Source: https://mvnrepository.com/artifact/jakarta.websocket/jakarta.websocket-api
